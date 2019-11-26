@@ -948,3 +948,4 @@ weighted_median <- function(x, w){
   which.mid <- max(which(middling <= 0.5))
   return(x[which.mid])
 }
+#' @import data.table

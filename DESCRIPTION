@@ -10,7 +10,7 @@ Depends:
     data.table(>= 1.12.2),
     dplyr (>= 0.8.3),
     ggplot2 (>= 3.2.1),
-    cowplot (>= 1.0.0),
+    cowplot (>= 0.9.0),
     viridis (>= 0.5.1),
     viridisLite(>= 0.3.0)
 Imports:
@@ -18,7 +18,7 @@ Imports:
     data.table(>= 1.12.2),
     dplyr (>= 0.8.3),
     ggplot2 (>= 3.2.1),
-    cowplot (>= 1.0.0),
+    cowplot (>= 0.9.0),
     viridis (>= 0.5.1),
     viridisLite(>= 0.3.0)
 License: GPL-3

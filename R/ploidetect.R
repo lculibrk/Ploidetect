@@ -1,3 +1,5 @@
+#' @import data.table
+#
 ## Temporary to source stuff
 #setwd("/projects/lculibrk_prj/CNV/Ploidetect2/")
 #for(i in Sys.glob("/projects/lculibrk_prj/CNV/Ploidetect2/R/*.R")){
@@ -661,9 +663,6 @@ ploidetect <- function(in_list, call_cna = F){
     }
     
     model_params <- rbind.data.frame(model_params, data.frame("modeling_tp" = d_diff, "depth_lik" = fit_stat, "maf_lik" = maf_scores$maf[1], "jitter" = em_sd, "tp" = maf_scores$tp[1], "ploidy" = maf_scores$ploidy[1], "n_imputed" = n_imputed))
-    chisqs <- c(chisqs, list(depth_posterior))
-    pdfs <- c(pdfs, list(data_den$pdf))
-    models <- c(models, list(list("posterior" = depth_posterior, "pdf" = data_den$pdf, "positions" = predictedpositions, "proportions" = proportions)))
   }
   
   #candidate_models <- model_params %>% group_by(npeaks) %>% summarise(rank = which.min(depth_lik), tp = tp[rank], depth_lik = depth_lik[rank], prop_unfit = prop_unfit[rank], jitter = jitter[rank], mean_bleed = mean_bleed[rank]) %>% select(-rank)
