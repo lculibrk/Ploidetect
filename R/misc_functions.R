@@ -523,6 +523,7 @@ maf_gmm_fit <- function(depth_data, vaf_data, chr_vec, means, variances, maf_var
   peak_fits <- apply(parametric_gmm_fit(data = depth_data, means = means, variances = variances), 1, which.max)
   peak_in <- peak_fits %in% names(onepct_weights)
   ploidy_data <- data.frame("depth" = depth_data, "vaf" = vaf_data, CN = peak_fits)
+
   # Since the names/indices of "means" don't necessarily mean anything we need to 
   # shift the values for peak_fits to align with their assumed copy number 
   ploidy_data$CN <- factor(ploidy_data$CN)
@@ -561,15 +562,17 @@ maf_gmm_fit <- function(depth_data, vaf_data, chr_vec, means, variances, maf_var
   lm_df <- data.frame("CN" = as.numeric(names(means)), "depth" = means)
   model = lm(CN ~ depth, lm_df)
   cns <- table_vec(round(predict(model, data.frame("depth" = depth_data))))
-  cns <- cns[cns > 0]
+  cns <- cns[as.numeric(names(cns)) >= 0]
   # Filters CN list to the nearest "sequential" CNs in the genome. Ie. the max
   # CN we consider is the highest CN that occurs twice in a row along a 
   # chromosome
-  for(cn in rev(names(cns))){
+  for(cn in rev(as.numeric(names(cns)))){
     vals <- which(round(predict(model, data.frame("depth" = depth_data))) == as.numeric(cn))
-    if(min(diff(vals)) == 1){
-      cns <- cns[as.numeric(names(cns)) <= cn]
-      break
+    if(length(vals) > 1){
+      if(min(diff(vals)) == 1){
+        cns <- cns[as.numeric(names(cns)) <= cn]
+        break
+      }
     }
   }
   max_cns <- max(as.numeric(names(cns[cns > 1])))
@@ -606,7 +609,7 @@ maf_gmm_fit <- function(depth_data, vaf_data, chr_vec, means, variances, maf_var
     return(x)
   }
   )
-  
+
   # Next we use the depth likelihoods as a prior to scale the VAF likelihoods
   range_vals <- 1:nrow(depth_maf_responsibilities)
   for(i in 1:length(arr)){
@@ -881,7 +884,6 @@ plot_density_gmm <- function(data, means, weights, sd, ...){
   pdf_fun <- mixpdf_function(means, weights, sd)
   den_pdf <- data.frame(x = den$x, y = den$y, prob = pdf_fun(den$x)$y)
   plot <- den_pdf %>% filter(x < max(means)) %>% ggplot(aes(x = x, y = y)) + geom_line() + geom_line(aes(x = x, y = prob, color = "Predicted")) + geom_vline(xintercept = means[means < max(data)], alpha = 0.1)
-  plot
   return(plot)
   
 }

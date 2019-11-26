@@ -63,9 +63,9 @@ ploidetect <- function(in_list, call_cna = F){
   ## Initialize plots object
   plots <- list()
   
-  #segments <- segmented_data %>% group_by(chr, segment) %>% dplyr::summarise("pos" = first(pos), "end" = last(end), "var_mafs" = sd(abs(as.numeric(unlist(unmerge_mafs(maf))) - 0.5) + 0.5, na.rm = T), "maf" = merge_mafs(maf, na.rm = T, exp = T), var_segments = sd(corrected_depth), segment_depth = median(corrected_depth))
+  segments <- segmented_data %>% group_by(chr, segment) %>% dplyr::summarise("pos" = first(pos), "end" = last(end), "var_mafs" = sd(abs(as.numeric(unlist(unmerge_mafs(maf))) - 0.5) + 0.5, na.rm = T), "maf" = merge_mafs(maf, na.rm = T, exp = T), var_segments = sd(corrected_depth), segment_depth = median(corrected_depth))
   #segment_dp_sd <- segments$var_segments^2 %>% mean(na.rm=T) %>% sqrt()
-  #segment_maf_sd <- segments$var_mafs^2 %>% mean(na.rm = T) %>% sqrt()
+  segment_maf_sd <- segments$var_mafs^2 %>% mean(na.rm = T) %>% sqrt()
   
   ## Compute limits on TP to sweep over
   ## Compute 5 and 95th percentiles
@@ -145,8 +145,6 @@ ploidetect <- function(in_list, call_cna = F){
     resp_mat <- compute_responsibilities(segmented_data$corrected_depth, predictedpositions, em_sd)
     
     em_sd <- match_kde_height(data = segmented_data$corrected_depth, means = predictedpositions, sd = em_sd)
-    
-    plot_density_gmm(data = segmented_data$corrected_depth, means = predictedpositions, weights = colSums(resp_mat, na.rm = T), sd = em_sd)
       
     ## Detect redundant models
     if(nrow(model_params) > 0){
@@ -398,6 +396,8 @@ ploidetect <- function(in_list, call_cna = F){
       jp_tbls[[paste0(lowest)]] <- result$jp_tbl
       next
     }
+    
+
     ## Select best model
     maf_scores <- maf_scores[maf_scores$ploidy != 0,]
     if(nrow(maf_scores) == 0){
@@ -650,7 +650,6 @@ ploidetect <- function(in_list, call_cna = F){
     ##segmented_data$segment_depth[ties]
     ##depth_probs <- depth_posterior %>% apply(., MARGIN = 1, min) %>% pchisq(df = 11) %>% mean()
     ##cn_assignments = max.col(-depth_posterior) - 1
-    ##maf_probs <- fit_mafs(input_mafs = segmented_data$median_maf, input_cn = cn_assignments, maf_sd = segment_maf_sd, tp = tp) %>% mean()
     ##fit_stat <- sum(log(props)) - 2*log(fit_stat)
     
     comp_resps <- colSums(compute_responsibilities(new_seg_data$segment_depth, predictedpositions, em_sd))
