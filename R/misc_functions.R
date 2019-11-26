@@ -607,9 +607,8 @@ maf_gmm_fit <- function(depth_data, vaf_data, chr_vec, means, variances, maf_var
     # Take mean likelihoods for each bin
     x <- x[,lapply(.SD, mean), by = maf_df$ind]
     return(x)
-  }
-  )
-
+  })
+  
   # Next we use the depth likelihoods as a prior to scale the VAF likelihoods
   range_vals <- 1:nrow(depth_maf_responsibilities)
   for(i in 1:length(arr)){
