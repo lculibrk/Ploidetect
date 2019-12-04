@@ -948,4 +948,15 @@ weighted_median <- function(x, w){
   which.mid <- max(which(middling <= 0.5))
   return(x[which.mid])
 }
+
+lowesswrapper <- function(x, y, bw){
+  ord <- order(x)
+  fit <- lowess(x = x, y = y, f = bw, iter = 3)
+  out <- list()
+  out$fitted[ord] <- fit$y
+  out$residuals <- y - out$fitted
+  return(out)
+}
+
+
 #' @import data.table
