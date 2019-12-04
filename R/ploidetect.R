@@ -16,10 +16,7 @@
 #library(ggplot2)
 #load("../../Ploidetect-stable/Ploidetect-package/data/centromeres.RData")
 #'@export
-ploidetect_presegment <- function(all_data){
-  
-  ## Simplify_size
-  simplify_size = 100000
+ploidetect_presegment <- function(all_data, simplify_size = 100000){
   
   ## Load centromeres
   centromeres <- centromeres
