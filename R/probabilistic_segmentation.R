@@ -1,4 +1,4 @@
-ploidetect_prob_segmentator <- function(prob_mat, ploidy, chr_vec, seg_vec, dist_vec, verbose = T, lik_shift = 1){
+ploidetect_prob_segmentator <- function(prob_mat, ploidy, chr_vec, seg_vec, dist_vec, verbose = T, lik_shift = 1, subclones_discovered = F){
   if(verbose){
     print("Performing segmentation and copy number variant calling")
   }
@@ -51,11 +51,11 @@ ploidetect_prob_segmentator <- function(prob_mat, ploidy, chr_vec, seg_vec, dist
   if(verbose){
     print("Performing segmentation of copy number data")
   }
-  compressedalldat <- unlist(lapply(datsplit, runiterativecompression_prob, segmentation_threshold = transition_threshold, verbose = verbose))
+  compressedalldat <- unlist(lapply(datsplit, runiterativecompression_prob, segmentation_threshold = transition_threshold, verbose = verbose, subclones_discovered = subclones_discovered))
   return(compressedalldat)
 }
 
-runiterativecompression_prob <- function(data, segmentation_threshold = segmentation_threshold, verbose = F){
+runiterativecompression_prob <- function(data, segmentation_threshold = segmentation_threshold, verbose = F, subclones_discovered = F){
 
   if(verbose){
     print("Running iterative compression to segment read depth data")
@@ -76,7 +76,7 @@ runiterativecompression_prob <- function(data, segmentation_threshold = segmenta
   while(!converged){
     windows <- length(compress)
     
-    compress <- compressdata_prob(compress, criteria = segmentation_threshold, dist_vec = dist)
+    compress <- compressdata_prob(compress, criteria = segmentation_threshold, dist_vec = dist, subclones_discovered = subclones_discovered)
 
 
     if(length(compress) == windows | length(compress) == 1){
@@ -87,7 +87,7 @@ runiterativecompression_prob <- function(data, segmentation_threshold = segmenta
   return(segs)
 }
 
-compressdata_prob <- function(compress, criteria, dist_vec){
+compressdata_prob <- function(compress, criteria, dist_vec, subclones_discovered = F){
   reps <- lapply(compress, nrow)
   ids = rep(x = 1:length(reps), times = unlist(reps))
   
@@ -99,44 +99,49 @@ compressdata_prob <- function(compress, criteria, dist_vec){
   
   compressed_compress <- compress_original[, lapply(.SD, mean), by = factor(ids)][,-1]
   
-  rel_liks <- compressed_compress/rowSums(compressed_compress)
+  rel_liks <- data.table::copy(compressed_compress)
   
-  rel_liks[apply(rel_liks, 1, function(x)all(is.na(x))),] <- 0
+  #rel_liks <- compressed_compress/rowSums(compressed_compress)
+  
+  #rel_liks[apply(rel_liks, 1, function(x)all(is.na(x))),] <- 0
   # Arrange data by position and remove tibble-ness
   # Get differences between neighbouring points
 
-  
-  states <- apply(rel_liks, 1, which.max)
-  state_probs <- apply(rel_liks, 1, max)
-  state_transitions <- data.frame("leading" = states[-1], "lagging" = states[1:(length(states)-1)])
-  state_transitions <- split(state_transitions, f = 1:nrow(state_transitions))
-  state_transitions <- lapply(state_transitions, unlist)
-  shifted <- lagged_df(rel_liks)
-  t_liks <- as.data.frame(rel_liks)
-  
-  state_vec <- 1:length(states)
-  
-  
-  
-
-  fit_val <- vapply(1:length(states), function(x){t_liks[x,states[x]]}, 0.01)
-  fit_next <- vapply(1:length(states), function(x){t_liks[x,c(states, 1)[x+1]]}, 0.01)
-  
-  fit_df <- cbind(fit_val, fit_next)
-  fit_df <- fit_df/rowSums(fit_df)
-  
-  fit_shifted <- vapply(1:length(states), function(x){t_liks[x + 1, states[x]]}, 0.01)
-  fit_shifted_next <- vapply(1:length(states), function(x){t_liks[x+1,c(states, 1)[x+1]]}, 0.01)
-  
-  fit_shifted_df <- cbind(fit_shifted, fit_shifted_next)
-  fit_shifted_df <- fit_shifted_df/rowSums(fit_shifted_df)
-  
-
-  
-  transition_liks <- rowSums(abs(fit_df - fit_shifted_df))
-
-  transition_probs <- transition_liks[-length(transition_liks)]
-  transition_probs[which(is.na(transition_probs))] <- dists$x[which(is.na(transition_probs))]
+  if(subclones_discovered){
+    states <- apply(rel_liks, 1, which.max)
+    state_probs <- apply(rel_liks, 1, max)
+    state_transitions <- data.frame("leading" = states[-1], "lagging" = states[1:(length(states)-1)])
+    state_transitions <- split(state_transitions, f = 1:nrow(state_transitions))
+    state_transitions <- lapply(state_transitions, unlist)
+    shifted <- lagged_df(rel_liks)
+    t_liks <- as.data.frame(rel_liks)
+    
+    state_vec <- 1:length(states)
+    
+    
+    
+    
+    fit_val <- vapply(1:length(states), function(x){t_liks[x,states[x]]}, 0.01)
+    fit_next <- vapply(1:length(states), function(x){t_liks[x,c(states, 1)[x+1]]}, 0.01)
+    
+    fit_df <- cbind(fit_val, fit_next)
+    fit_df <- fit_df/rowSums(fit_df)
+    
+    fit_shifted <- vapply(1:length(states), function(x){t_liks[x + 1, states[x]]}, 0.01)
+    fit_shifted_next <- vapply(1:length(states), function(x){t_liks[x+1,c(states, 1)[x+1]]}, 0.01)
+    
+    fit_shifted_df <- cbind(fit_shifted, fit_shifted_next)
+    fit_shifted_df <- fit_shifted_df/rowSums(fit_shifted_df)
+    
+    
+    
+    transition_liks <- rowSums(abs(fit_df - fit_shifted_df))
+    
+    transition_probs <- transition_liks[-length(transition_liks)]
+    transition_probs[which(is.na(transition_probs))] <- dists$x[which(is.na(transition_probs))]
+  }else{
+    transition_probs <- rowSums(abs(apply(rel_liks, 2, diff)))
+  }
   #transition_prob <- sapply(1:nrow(state_transitions), function(x){
   #  transition_probs[x, state_transitions$leading[x]] - transition_probs[x, state_transitions$lagging[x]]
   #})
@@ -187,7 +192,6 @@ compressdata_prob <- function(compress, criteria, dist_vec){
   d_comp <- as.numeric(na_or_true(d1 > d2))
   
   e_comp[e_eq] <- d_comp[e_eq]
-  e_comp[e_eq] <- d_comp[e_eq]
   
   if(all(unlist(reps) == 1)){
     preserve <- unique(1:length(V(graph)) - (1-e_comp))
@@ -208,10 +212,11 @@ compressdata_prob <- function(compress, criteria, dist_vec){
     ## Check for vertices where there is only one bin in the segment
     lenone <- which(unlist(reps) == 1)
     ## Preserve the edge that has the lower differential probability
-    preserve <- unique(lenone - as.numeric(!na_or_true(e1[lenone] > e2[lenone])))
+    preserve <- unique(lenone - e_comp[lenone])
     
     sequentials <- preserve[which(na_or_true((preserve - shift(preserve) == 1) & (-(preserve - shift(preserve, type = "lead")) == 1)))]
     sequentials <- sequentials[!sequentials %in% c(1, length(edges) + 1)]
+    sequentials <- sequentials[sequentials > 0]
     
     preserve <- preserve[!preserve %in% (sequentials - na_or_true(edges[sequentials - 1] > edges[sequentials + 1]))]
     
@@ -219,7 +224,10 @@ compressdata_prob <- function(compress, criteria, dist_vec){
     # Here we subtract the vertex IDs by an integer-boolean of whether e1 > e2
     # If e1 is the larger edge, then this evaluates to TRUE, so we get the value vetex_id - 1,
     # which when translated to edge IDs, is the left edge, resulting in the left edge being deleted.
-    single <- as.numeric(na.omit(unique((1:length(e1)) - as.numeric(e1 > e2))))
+    single <- as.numeric(na.omit(unique((1:length(e1)) - e_comp)))
+    single <- single[single > 0]
+    
+    single <- unique(c(single, which(edges > criteria)))
     
     to_delete <- unique(c(both, single))
     to_delete <- to_delete[!to_delete %in% preserve]
@@ -314,7 +322,9 @@ compressdata_prob <- function(compress, criteria, dist_vec){
   compress <- out_probs
   i_segs <- 1:length(compress)
   i_segs <- rep(i_segs, times = unlist(lapply(compress, nrow)))
-  #subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs) %>%  filter(pos < 6.6e+07, pos > 6e+07) %>% ggplot(aes(x = pos, y = corrected_depth, color = seg)) + geom_point() + scale_color_viridis()
+  subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs, "breakpoint" = i_segs != shift(i_segs)) %>%  filter(pos < 0.5e+07) %>% ggplot(aes(x = pos, y = corrected_depth, color = seg == 4)) + geom_point() + scale_color_viridis(discrete = T)
+  subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs, "breakpoint" = i_segs != shift(i_segs)) %>%  filter(pos < 0.5e+07) %>% ggplot(aes(x = pos, y = corrected_depth, color = seg)) + geom_point() + scale_color_viridis(discrete = F)
+  
   #print(dat[which(dat$npoints == 1),])
   if(T){
     message(paste0("Iteration complete, segment count = ", length(compress)))
@@ -756,7 +766,8 @@ segment_subclones <- function(new_seg_data, predictedpositions, depth_variance, 
   return(list("data" = list(new_seg_data), "fraction" = subclonal_fraction, "subclonal_variance" = subclonal_variance))
 }
 
-ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T){
+#' @export
+ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1){
   predictedpositions <- get_coverage_characteristics(tp, ploidy, maxpeak)$cn_by_depth
   
   
@@ -804,7 +815,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   clonal_cna_data$segment <- clonal_cnas
   clonal_cna_data[,segment_depth := median(corrected_depth), by = list(chr, segment)]
   
-  clonal_cna_data %>% filter(chr == "4") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F) + geom_point(aes(x = pos, y = segment_depth))
+  clonal_cna_data %>% filter(chr == "X") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F) + geom_point(aes(x = pos, y = segment_depth))
   #clonal_cna_data %>% filter(fit == 10) %>% ggplot(aes(x = gc, y =corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)# + geom_line(aes(x = pos, y = gc * maxpeak*2)) + scale_y_continuous(sec.axis = sec_axis(trans = ~./(maxpeak*2)))
   
   #clonal_cna_data %>% filter(chr == "6") %>% ggplot(aes(x = gc, y = corrected_depth)) + geom_point() + geom_smooth(method = "loess", span = 1)
@@ -950,6 +961,11 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     val <- iterations[i]
     
+    if(val < min_size){
+      condition = T
+      break
+    }
+    
     if(i == 1){
       prev_val = unaltered
     }else{prev_val = iterations[i - 1]}
@@ -1029,14 +1045,14 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     compressed_joint_resps <- compressed_joint_resps[, lapply(.SD, mean), by = list(chr, segment)]
     chr_ends <- which(!na_or_true(shift(x = compressed_joint_resps$chr, type = "lead") == compressed_joint_resps$chr))
     compressed_joint_resps <- compressed_joint_resps[,c("chr", "segment"):= NULL]
-    seg_metric <- quantile(apply(compressed_joint_resps, 1, max), probs = 0.25)
+    #seg_metric <- quantile(apply(compressed_joint_resps, 1, max), probs = 0.25)
     compressed_joint_resps <- compressed_joint_resps/rowSums(compressed_joint_resps)
     compressed_joint_resps[which(is.na(compressed_joint_resps[,1])),] <- 0
     
     metric <- rowSums(abs(current_joint_resps - segged_joint_resps))
     metric[is.na(metric)] <- 2
     
-    metric[which(apply(current_joint_probs, 1, max) <= seg_metric)] <- 0
+    #metric[which(apply(current_joint_probs, 1, max) <= seg_metric)] <- 0
     
     break_metric <- quantile(rowSums(abs(apply(compressed_joint_resps, 2, diff)))[-chr_ends], prob = 0.5)
     
@@ -1049,7 +1065,9 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     }
 
     
-    current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "13") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = F)
+    current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = F)
+    current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "13") %>% ggplot(aes(x = pos, y = corrected_depth, color = apply(segged_joint_resps, 1, which.max))) + geom_point() + scale_color_viridis(discrete = F)
+    current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "13") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
     
     
     current_segment_mappings$flagged <- metric >= break_metric
@@ -1101,7 +1119,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     
     
-    busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max) < seg_metric) %>%  filter(chr == "6", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = T) + geom_hline(yintercept = iteration_clonal_positions[iteration_clonal_positions < 15000])
+    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max) < seg_metric) %>%  filter(chr == "X", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = T) + geom_hline(yintercept = iteration_clonal_positions[iteration_clonal_positions < 15000])
     
     busted_jp_tbl <- maf_gmm_fit_subclonal_prior(depth_data = busted_segment_mappings$segment_depth, vaf_data = busted_segment_mappings$maf, chr_vec = busted_segment_mappings$chr, means = iteration_positions, variances = variance/(unaltered/val), maf_variances = maf_variance, maxpeak = iteration_maxpeak, ploidy = ploidy, tp = tp, cn_list = individual_pos)
     
