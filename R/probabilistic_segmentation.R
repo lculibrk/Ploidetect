@@ -212,7 +212,7 @@ compressdata_prob <- function(compress, criteria, dist_vec, subclones_discovered
     ## Check for vertices where there is only one bin in the segment
     lenone <- which(unlist(reps) == 1)
     ## Preserve the edge that has the lower differential probability
-    preserve <- unique(lenone - e_comp[lenone])
+    preserve <- unique(lenone - (1 - e_comp[lenone]))
     
     sequentials <- preserve[which(na_or_true((preserve - shift(preserve) == 1) & (-(preserve - shift(preserve, type = "lead")) == 1)))]
     sequentials <- sequentials[!sequentials %in% c(1, length(edges) + 1)]
@@ -322,8 +322,8 @@ compressdata_prob <- function(compress, criteria, dist_vec, subclones_discovered
   compress <- out_probs
   i_segs <- 1:length(compress)
   i_segs <- rep(i_segs, times = unlist(lapply(compress, nrow)))
-  subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs, "breakpoint" = i_segs != shift(i_segs)) %>%  filter(pos < 0.5e+07) %>% ggplot(aes(x = pos, y = corrected_depth, color = seg == 4)) + geom_point() + scale_color_viridis(discrete = T)
-  subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs, "breakpoint" = i_segs != shift(i_segs)) %>%  filter(pos < 0.5e+07) %>% ggplot(aes(x = pos, y = corrected_depth, color = seg)) + geom_point() + scale_color_viridis(discrete = F)
+  subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs, "breakpoint" = i_segs != shift(i_segs)) %>%  filter(pos < 0.5e+07) %>% ggplot(aes(x = pos, y = corrected_depth, color = seg == 6)) + geom_point() + scale_color_viridis(discrete = T)
+  subcl_seg %>% filter(chr == "X") %>% mutate("seg" = i_segs, "breakpoint" = i_segs != shift(i_segs)) %>%  filter() %>% ggplot(aes(x = pos, y = corrected_depth, color = seg)) + geom_point() + scale_color_viridis(discrete = F)
   
   #print(dat[which(dat$npoints == 1),])
   if(T){
