@@ -24,6 +24,7 @@ merge_mafs <- function(inputmafs, na.rm = T, flip = F, exp = F){
   }
   return(out)
 }
+
 unmerge_mafs <- function(merged_mafs, flip = F){
   mafs <- na.omit(merged_mafs)
   if(flip){
@@ -31,6 +32,7 @@ unmerge_mafs <- function(merged_mafs, flip = F){
   }
   unlist(lapply(mafs, strsplit, split = ";"), recursive = F)
 }
+
 flip_merged_mafs <- function(merged_mafs){
   mafs <- unlist(lapply(mafs, strsplit, split = ";"), recursive = F)
   flipped_mafs <- lapply(mafs, function(x)merge_mafs(abs(as.numeric(x) - 0.5) + 0.5, exp = T))

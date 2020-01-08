@@ -592,9 +592,16 @@ ploidetect <- function(in_list, call_cna = F){
     train_df <- data.frame("segment_depth" = predictedpositions, "CN" = seq(from = ploidy - 5, to = ploidy + 5))
     
     model <- lm(CN ~ segment_depth, train_df)
-    seg_mat <- joint_probs
     
-    segs <- ploidetect_prob_segmentator(prob_mat = seg_mat, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = 1:nrow(segmented_data), dist_vec = segmented_data$corrected_depth)
+    seg_mat <- joint_probs
+    seg_mat <- seg_mat/rowSums(seg_mat)
+    seg_mat <- as.matrix(seg_mat)
+    seg_mat[is.na(seg_mat)] <- 0
+    seg_mat <- data.table(seg_mat)
+    
+    
+    
+    segs <- ploidetect_prob_segmentator(prob_mat = seg_mat, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = 1:nrow(segmented_data), dist_vec = segmented_data$corrected_depth, subclones_discovered = F, lik_shift = max(seg_mat, na.rm = T))
     
     new_seg_data <- segmented_data %>% mutate("segment" = segs, "prob" = probs) %>% group_by(chr, segment) %>% dplyr::mutate(segment_depth = median(corrected_depth), prob = median(prob))
     
