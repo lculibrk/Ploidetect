@@ -10,7 +10,7 @@ ploidetect_prob_segmentator <- function(prob_mat, ploidy, chr_vec, seg_vec, dist
   
   resp_mat <- data.table::copy(prob_mat)
   
-  resp_mat <- resp_mat[,-((ncol(resp_mat)-3):ncol(resp_mat))]
+  resp_mat <- resp_mat[,-((ncol(resp_mat)-1):ncol(resp_mat))]
   
   resp_mat <- resp_mat/rowSums(resp_mat)
   
