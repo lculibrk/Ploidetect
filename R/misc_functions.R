@@ -117,8 +117,8 @@ gmm_em_fixed_var <- function(data, means, var){
   
   n_means = colSums(r_mat * data, na.rm = T)/colSums(r_mat, na.rm = T)
   ## new diff is a weighted mean of the diffs, weighted by the diff'ed total responsibilities
-  #n_diff <- weighted.mean(diff(n_means), na.rm = T, w = ((colSums(r_mat, na.rm = T) + shift(colSums(r_mat, na.rm = T)))/2)[-1])
-  n_diff <- mean(diff(n_means), na.rm = T)
+  n_diff <- weighted.mean(diff(n_means), na.rm = T, w = ((colSums(r_mat, na.rm = T) + shift(colSums(r_mat, na.rm = T)))/2)[-1])
+  #n_diff <- mean(diff(n_means), na.rm = T)
   if(is.na(n_diff)){
     return(var)
   }
