@@ -116,7 +116,12 @@ gmm_em_fixed_var <- function(data, means, var){
   lik <- mean(rowSums(p_mat * r_mat, na.rm = T))
   
   n_means = colSums(r_mat * data, na.rm = T)/colSums(r_mat, na.rm = T)
+  ## new diff is a weighted mean of the diffs, weighted by the diff'ed total responsibilities
+  #n_diff <- weighted.mean(diff(n_means), na.rm = T, w = ((colSums(r_mat, na.rm = T) + shift(colSums(r_mat, na.rm = T)))/2)[-1])
   n_diff <- mean(diff(n_means), na.rm = T)
+  if(is.na(n_diff)){
+    return(var)
+  }
   n_means = seq(from = means[6] - n_diff*5, to = means[6] + n_diff*5, by = n_diff)
   p_mat <- parametric_gmm_fit(data, n_means, var)
   r_mat <- p_mat/rowSums(p_mat)
@@ -143,14 +148,14 @@ gmm_em_fixed_var <- function(data, means, var){
   out_diff <- seq(from = i_diff, to = n_diff, length.out = 20)[which.max(t)]
   return(out_diff)
 }
- #' Computes responsibilities for a gaussian mixture model with specified
- #' parameters
- #' 
- #' \code{compute_responsibilities} returns a matrix as in parametric_gmm_fit
- #' except values are responsibilities rather than probabilities
- #' @inheritParams parametric_gmm_fit
- #' @return matrix of values with row count equal to the length of data and
- #' column count equal to the length of the means
+#' Computes responsibilities for a gaussian mixture model with specified
+#' parameters
+#' 
+#' \code{compute_responsibilities} returns a matrix as in parametric_gmm_fit
+#' except values are responsibilities rather than probabilities
+#' @inheritParams parametric_gmm_fit
+#' @return matrix of values with row count equal to the length of data and
+#' column count equal to the length of the means
 compute_responsibilities <- function(data, means, variances){
   mat <- parametric_gmm_fit(data = data, means = means, variances = variances)
   resp <- mat/rowSums(mat)
@@ -186,14 +191,14 @@ gmm_em_only_var <- function(data, means, initial_var){
     old_lik <- new_lik
     ## LIKELIHOOD
     gaussian_probs <- parametric_gmm_fit(data = data, means = means, variances = vars)
-
+    
     ## EXPECTATION STEP
     ## Compute responsibilities
-
+    
     responsibilities <- t(t(gaussian_probs) * weights)
     responsibilities <- responsibilities/rowSums(responsibilities)
     responsibilities[is.na(responsibilities)[,1],] <- 0
-
+    
     new_lik <- rowMeans(gaussian_probs * responsibilities) %>% mean()
     ### Record parameter information
     liks <- rbind.data.frame(liks, data.frame("vars" = vars, "liks" = new_lik))
@@ -523,7 +528,7 @@ maf_gmm_fit <- function(depth_data, vaf_data, chr_vec, means, variances, maf_var
   peak_fits <- apply(parametric_gmm_fit(data = depth_data, means = means, variances = variances), 1, which.max)
   peak_in <- peak_fits %in% names(onepct_weights)
   ploidy_data <- data.frame("depth" = depth_data, "vaf" = vaf_data, CN = peak_fits)
-
+  
   # Since the names/indices of "means" don't necessarily mean anything we need to 
   # shift the values for peak_fits to align with their assumed copy number 
   ploidy_data$CN <- factor(ploidy_data$CN)
@@ -709,7 +714,7 @@ maf_gmm_fit_subclonal <- function(depth_data, vaf_data, chr_vec, means, variance
   depth_maf_responsibilities <- depth_maf_posterior/rowSums(depth_maf_posterior)
   
   depth_maf_responsibilities[is.na(rowSums(depth_maf_responsibilities)),] <- 0
-
+  
   arr <- lapply(cns, testMAF_sc, tp = test_tp)
   
   print(arr)
@@ -871,9 +876,121 @@ maf_gmm_fit_subclonal_prior <- function(depth_data, vaf_data, chr_vec, means, va
   
 }
 
+maf_gmm_fit_subclonal_prior_segments <- function(depth_data, vaf_data, chr_vec, means, variances, maf_variances, maxpeak, ploidy = ploidy, tp = tp, cn_list, pos_list, seg_tbl){
+  ## Compute weights of initial fit
+  proportions = compute_responsibilities(data = depth_data, means = means, variances = variances)
+  proportions = colSums(proportions)/sum(colSums(proportions))
+  
+  seg_vec = rep(seg_tbl$segment, seg_tbl$n)
+  
+  depth_vaf_df <- split(data.frame("d" = depth_data, "v" = vaf_data, "c" = chr_vec), f = list(chr_vec, seg_vec), drop = T)
+  
+  curr_d_diff <- get_coverage_characteristics(tp, ploidy, maxpeak)$diff
+  
+  tot_cns <- as.numeric(names(table_vec(do.call(c, cn_list))))
+  
+  chr_joints <- list()
+  for(line in 1:nrow(seg_tbl)){
+    chromosome = seg_tbl$chr[line]
+    chr_data <- depth_vaf_df[[line]]
+    chr_means <- depth(maxpeak = maxpeak, d = curr_d_diff, P = ploidy, n = pos_list[[line]])
+    names(chr_means) <- cn_list[[chromosome]]
+    depth_maf_posterior <- parametric_gmm_fit(data = chr_data$d, means = chr_means, variances = variances)
+    depth_maf_responsibilities <- depth_maf_posterior/rowSums(depth_maf_posterior)
+    depth_maf_responsibilities[is.na(rowSums(depth_maf_responsibilities)),] <- 0
+    cns <- as.numeric(names(chr_means))
+    arr <- lapply(cns, testMAF_sc, tp = tp)
+    maf_ind <- 1:nrow(chr_data)
+    maf_ind <- maf_ind[!is.na(chr_data$v)]
+    maf_list <- lapply(unmerge_mafs(as.character(chr_data$v[maf_ind])), as.numeric)
+    names(maf_list) <- maf_ind
+    if(length(maf_ind)){
+      maf_df <- stack(maf_list)
+      maf_df$ind <- as.numeric(levels(maf_df$ind)[maf_df$ind])
+      
+      
+      max_len <- max(sapply(arr, length))
+      
+      ## Fill vectors to same length
+      arr <- lapply(arr, function(x){
+        x <- c(x, rep(NA, times = max_len - length(x)))
+        #names(x) <- 0:(max_len-1)
+      })
+      
+      arr <- lapply(arr, function(x){
+        #x <- t(as.matrix(x))
+        #maf_variances <- match_kde_height(data = maf_df$values, means = x[!is.na(x)], sd = 0.03)
+        
+        x <- parametric_gmm_fit(data = maf_df$values, means = x, variances = maf_variances)
+        #plot_density_gmm(maf_df$values, means = arr[[4]][1:3], sd = maf_variances, weights = colSums(x/rowSums(x, na.rm = T), na.rm = T)[1:3])
+        
+        #t <- mixpdf_function(means = arr[[4]], proportions = colSums(x/rowSums(x))/sum(colSums(x/rowSums(x))), sd = maf_variances)
+        #data.frame(x = density(maf_df$values)$x, y = density(maf_df$values)$y, prob = t(density(maf_df$values)$x)$y) %>% ggplot(aes(x = x, y = y)) + geom_line() + geom_line(aes(x = x, y = prob, color = "GMM")) + geom_vline(xintercept = arr[[4]], linetype = 3) + xlab("VAF") + ylab("Density")
+        #x = as.data.frame(x)
+        #x$f <- maf_df$ind
+        x <- data.table(x)
+        x <- x[,lapply(.SD, mean), by = maf_df$ind]
+        return(x)
+      })
+      
+      range_vals <- 1:nrow(depth_maf_responsibilities)
+      for(i in 1:length(arr)){
+        i_arr <- data.table::copy(arr[[i]])
+        i_range <- range_vals[!range_vals %in% i_arr$maf_df]
+        na_cols <- names(i_arr)[which(apply(arr[[i]], 2, function(x)all(is.na(x))))]
+        if(length(i_range)){
+          nomaf <- data.table("maf_df" = i_range)
+          while(ncol(nomaf) < ncol(i_arr)){
+            nomaf <- cbind.data.frame(nomaf, data.table(rep(NA, times = nrow(nomaf))))
+            names(nomaf) <- names(i_arr)[1:length(names(nomaf))]
+          }
+         
+          i_arr <- rbind(i_arr, nomaf)
+          i_arr <- data.frame(i_arr[order(maf_df)])
+        }
+        if(length(na_cols) & length(i_range)){
+          i_arr[,-(which(names(i_arr) %in% na_cols))][i_range,-1] <- depth_maf_posterior[i_range,i]
+        }else if(length(i_range)){
+          i_arr[i_range,-1] <- depth_maf_posterior[i_range, i]
+        }
+        i_arr <- data.table(i_arr)
+        arr[[i]] = (i_arr[,-1] * depth_maf_responsibilities[,i])
+      }
+      
+      joint_probs <- lapply(arr, function(x){apply(x, 1, max, na.rm = T)}) %>% do.call(cbind, .)
+    }else{joint_probs <- depth_maf_posterior}
+    
+    colnames(joint_probs) <- as.character(cns)
+    
+    to_add <- tot_cns[!as.character(tot_cns) %in% colnames(joint_probs)]
+    
+    to_add_dt <- data.table(matrix(0, nrow = nrow(joint_probs), ncol = length(to_add)))
+    
+    names(to_add_dt) <- as.character(to_add)
+    
+    joint_probs <- cbind(to_add_dt, joint_probs)
+    
+    setcolorder(joint_probs, as.character(tot_cns))
+    
+    joint_probs <- data.table(joint_probs)
+    chr_joints <- c(chr_joints, list(joint_probs))
+    names(chr_joints)[length(chr_joints)] <- chromosome
+    #print(line)
+  }
+  chr_joints <- rbindlist(chr_joints)
+  
+  maf_posteriors <- chr_joints %>% apply(1, max) %>% mean()
+  
+  maf_scores <- data.frame("maf" = mean(maf_posteriors), "tp" = tp, "ploidy" = ploidy)
+  
+  return(list("model" = maf_scores, "jp_tbl" = chr_joints))
+  
+}
+
 na_or_true <- function(x){
   return((is.na(x)) | x)
 }
+
 
 
 plot_density_gmm <- function(data, means, weights, sd, ...){
