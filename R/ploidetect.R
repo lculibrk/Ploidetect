@@ -14,7 +14,7 @@
 #library(dplyr)
 #library(data.table)
 #library(ggplot2)
-#load("../../Ploidetect-stable/Ploidetect-package/data/centromeres.RData")
+#load("data/centromeres.RData")
 #'@export
 ploidetect_presegment <- function(all_data, simplify_size = 100000){
   
@@ -133,7 +133,7 @@ ploidetect <- function(in_list, call_cna = F){
     
     resp_mat <- compute_responsibilities(segmented_data$corrected_depth, predictedpositions, em_sd)
     
-   # plot_density_gmm(segmented_data$segment_depth, means = predictedpositions, weights = colSums(resp_mat, na.rm = T), sd = em_sd)
+    #plot_density_gmm(segmented_data$segment_depth, means = predictedpositions, weights = colSums(resp_mat, na.rm = T), sd = em_sd)
     
     
     d_diff <- gmm_em_fixed_var(data = segmented_data$corrected_depth, means = predictedpositions, var = em_sd)
@@ -377,9 +377,9 @@ ploidetect <- function(in_list, call_cna = F){
     }else{n_imputed = 0}
     
     ploidy_fit_data <- plot_data %>% 
-      mutate(fit_peak = fit_peak, CN = fit_peak) %>% 
-      select(chr, segment, maf, fit_peak, prob) %>% 
-      filter(fit_peak %in% names(onepct_pos), !is.na(maf)) %>% 
+      dplyr::mutate(fit_peak = fit_peak, CN = fit_peak) %>% 
+      dplyr::select(chr, segment, maf, fit_peak, prob) %>% 
+      dplyr::filter(fit_peak %in% names(onepct_pos), !is.na(maf)) %>% 
       tidyr::separate_rows(maf, sep = ";") %>% 
       mutate(median_maf = as.numeric(maf))
     
@@ -581,11 +581,13 @@ ploidetect <- function(in_list, call_cna = F){
       ggtitle(paste0("TP = ", round(maf_scores$tp[1], digits = 2), ", Ploidy = ", maf_scores$ploidy[1])) + 
       xlab("Read Depth") + 
       ylab("Density") + 
+      theme_cowplot() + 
       theme(axis.text.x = element_text(size=15),
             axis.text.y = element_text(size=15),
             axis.title = element_text(size=20),
             plot.title = element_text(size = 15),
             legend.position = "none")
+
     
     print(p)
     
@@ -601,7 +603,7 @@ ploidetect <- function(in_list, call_cna = F){
     
     
     
-    segs <- ploidetect_prob_segmentator(prob_mat = seg_mat, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = 1:nrow(segmented_data), dist_vec = segmented_data$corrected_depth, subclones_discovered = F, lik_shift = max(seg_mat, na.rm = T))
+    segs <- ploidetect_prob_segmentator(prob_mat = seg_mat, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = 1:nrow(segmented_data), dist_vec = segmented_data$corrected_depth, subclones_discovered = F, lik_shift = 1.5)
     
     new_seg_data <- segmented_data %>% mutate("segment" = segs, "prob" = probs) %>% group_by(chr, segment) %>% dplyr::mutate(segment_depth = median(corrected_depth), prob = median(prob))
     
@@ -610,11 +612,11 @@ ploidetect <- function(in_list, call_cna = F){
     practical_sd <- new_seg_data %>% group_by(chr, segment) %>% add_tally() %>% filter(n > 2) %>% dplyr::summarise("var_dp" = median(abs(corrected_depth - median(corrected_depth))), "n" = first(n)) %>% ungroup %>% dplyr::summarise("var_dp" = weighted.mean(var_dp, w = n)) %>% unlist()
     mad_gmm <- gmm_mad(new_seg_data$corrected_depth, means = predictedpositions, variances = em_sd)
     
-    new_seg_data %>% filter(chr == "5") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis()
+    new_seg_data %>% filter(chr == "3") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis()
     
     contiguity_dat <- data.table(new_seg_data)[, .(pos = first(pos), end = last(end)), by = list(chr, segment)]
     
-    n50 <- n50_fun(contiguity_dat$end - contiguity_dat$pos)
+    n50 <- nx_fun(as.numeric(contiguity_dat$end - contiguity_dat$pos), 0.5)
     
     if(exists("n50s")){
       n50s <- c(n50s, n50)
@@ -676,7 +678,7 @@ ploidetect <- function(in_list, call_cna = F){
   
   max_n50 <- data.table(new_seg_data)[, .(pos = first(pos), end = last(end)), by = list(chr, segment)]
   
-  max_n50 <- n50_fun(sort(max_n50$end - max_n50$pos))
+  max_n50 <- nx_fun(sort(max_n50$end - max_n50$pos), n = 0.5)
   
   max_n50 <- max(n50s)
   

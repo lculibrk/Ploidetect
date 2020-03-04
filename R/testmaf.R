@@ -33,6 +33,7 @@ testMAF <- function(CN, tp){
 }
 #' @export
 testMAF_sc <- function(CN, tp){
+  CN <- max(CN, 0)
   fraction = CN - floor(CN)
   if(fraction == 0){
     return(testMAF(CN, tp))

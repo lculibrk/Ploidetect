@@ -77,6 +77,7 @@ normpdf <- function(x, mean, sd){
 parametric_gmm_fit <- function(data, means, variances){
   gaussians <- cbind(means, variances)
   result <- outer(data, gaussians[,1], "zt_p", "sd" = gaussians[,2])
+  colnames(result) = row.names(gaussians)
   return(result)
 }
 #' Computes weighted median absolute deviations (MADs) for each component of a
@@ -317,6 +318,16 @@ tp_diffploidy <- function(cov_char, new_ploidy){
   return(1 - tp)
 }
 
+#'@export
+translate_model_characteristics <- function(new_diff, ploidy, maxpeak){
+  depth <- function(maxpeak, d, P, n){
+    return(structure(maxpeak - d * (P - n), names = n))
+  }
+  d0 = depth(maxpeak = maxpeak, d = new_diff, P = ploidy, n = 0)
+  d2 = depth(maxpeak = maxpeak, d = new_diff, P = ploidy, n = 2)
+  tp = d0/(d2)
+  return(1 - tp)
+}
 #' Compute cosine similarity of two vectors
 #' 
 #' \code{cosine_sim} returns the cosine similarity of two vectors
@@ -899,66 +910,68 @@ maf_gmm_fit_subclonal_prior_segments <- function(depth_data, vaf_data, chr_vec, 
     depth_maf_responsibilities <- depth_maf_posterior/rowSums(depth_maf_posterior)
     depth_maf_responsibilities[is.na(rowSums(depth_maf_responsibilities)),] <- 0
     cns <- as.numeric(names(chr_means))
-    arr <- lapply(cns, testMAF_sc, tp = tp)
-    maf_ind <- 1:nrow(chr_data)
-    maf_ind <- maf_ind[!is.na(chr_data$v)]
-    maf_list <- lapply(unmerge_mafs(as.character(chr_data$v[maf_ind])), as.numeric)
-    names(maf_list) <- maf_ind
-    if(length(maf_ind)){
-      maf_df <- stack(maf_list)
-      maf_df$ind <- as.numeric(levels(maf_df$ind)[maf_df$ind])
+    #arr <- lapply(cns, testMAF_sc, tp = tp)
+    #maf_ind <- 1:nrow(chr_data)
+    #maf_ind <- maf_ind[!is.na(chr_data$v)]
+    #maf_list <- lapply(unmerge_mafs(as.character(chr_data$v[maf_ind])), as.numeric)
+    #names(maf_list) <- maf_ind
+    #if(length(maf_ind)){
+    #  maf_df <- stack(maf_list)
+    #  maf_df$ind <- as.numeric(levels(maf_df$ind)[maf_df$ind])
       
       
-      max_len <- max(sapply(arr, length))
+    #  max_len <- max(sapply(arr, length))
       
-      ## Fill vectors to same length
-      arr <- lapply(arr, function(x){
-        x <- c(x, rep(NA, times = max_len - length(x)))
-        #names(x) <- 0:(max_len-1)
-      })
+    #  ## Fill vectors to same length
+    #  arr <- lapply(arr, function(x){
+    #    x <- c(x, rep(NA, times = max_len - length(x)))
+    #    #names(x) <- 0:(max_len-1)
+    #  })
       
-      arr <- lapply(arr, function(x){
+    #  arr <- lapply(arr, function(x){
         #x <- t(as.matrix(x))
         #maf_variances <- match_kde_height(data = maf_df$values, means = x[!is.na(x)], sd = 0.03)
         
-        x <- parametric_gmm_fit(data = maf_df$values, means = x, variances = maf_variances)
+    #    x <- parametric_gmm_fit(data = maf_df$values, means = x, variances = maf_variances)
         #plot_density_gmm(maf_df$values, means = arr[[4]][1:3], sd = maf_variances, weights = colSums(x/rowSums(x, na.rm = T), na.rm = T)[1:3])
         
         #t <- mixpdf_function(means = arr[[4]], proportions = colSums(x/rowSums(x))/sum(colSums(x/rowSums(x))), sd = maf_variances)
         #data.frame(x = density(maf_df$values)$x, y = density(maf_df$values)$y, prob = t(density(maf_df$values)$x)$y) %>% ggplot(aes(x = x, y = y)) + geom_line() + geom_line(aes(x = x, y = prob, color = "GMM")) + geom_vline(xintercept = arr[[4]], linetype = 3) + xlab("VAF") + ylab("Density")
         #x = as.data.frame(x)
         #x$f <- maf_df$ind
-        x <- data.table(x)
-        x <- x[,lapply(.SD, mean), by = maf_df$ind]
-        return(x)
-      })
+    #    x <- data.table(x)
+    #    x <- x[,lapply(.SD, mean), by = maf_df$ind]
+    #    return(x)
+    #  })
       
-      range_vals <- 1:nrow(depth_maf_responsibilities)
-      for(i in 1:length(arr)){
-        i_arr <- data.table::copy(arr[[i]])
-        i_range <- range_vals[!range_vals %in% i_arr$maf_df]
-        na_cols <- names(i_arr)[which(apply(arr[[i]], 2, function(x)all(is.na(x))))]
-        if(length(i_range)){
-          nomaf <- data.table("maf_df" = i_range)
-          while(ncol(nomaf) < ncol(i_arr)){
-            nomaf <- cbind.data.frame(nomaf, data.table(rep(NA, times = nrow(nomaf))))
-            names(nomaf) <- names(i_arr)[1:length(names(nomaf))]
-          }
+    #  range_vals <- 1:nrow(depth_maf_responsibilities)
+    #  for(i in 1:length(arr)){
+    #    i_arr <- data.table::copy(arr[[i]])
+    #    i_range <- range_vals[!range_vals %in% i_arr$maf_df]
+    #    na_cols <- names(i_arr)[which(apply(arr[[i]], 2, function(x)all(is.na(x))))]
+    #    if(length(i_range)){
+    #      nomaf <- data.table("maf_df" = i_range)
+    #      while(ncol(nomaf) < ncol(i_arr)){
+    #        nomaf <- cbind.data.frame(nomaf, data.table(rep(NA, times = nrow(nomaf))))
+    #        names(nomaf) <- names(i_arr)[1:length(names(nomaf))]
+    #      }
          
-          i_arr <- rbind(i_arr, nomaf)
-          i_arr <- data.frame(i_arr[order(maf_df)])
-        }
-        if(length(na_cols) & length(i_range)){
-          i_arr[,-(which(names(i_arr) %in% na_cols))][i_range,-1] <- depth_maf_posterior[i_range,i]
-        }else if(length(i_range)){
-          i_arr[i_range,-1] <- depth_maf_posterior[i_range, i]
-        }
-        i_arr <- data.table(i_arr)
-        arr[[i]] = (i_arr[,-1] * depth_maf_responsibilities[,i])
-      }
+    #      i_arr <- rbind(i_arr, nomaf)
+    #      i_arr <- data.frame(i_arr[order(maf_df)])
+    #    }
+    #    if(length(na_cols) & length(i_range)){
+    #      i_arr[,-(which(names(i_arr) %in% na_cols))][i_range,-1] <- depth_maf_posterior[i_range,i]
+    #    }else if(length(i_range)){
+    #      i_arr[i_range,-1] <- depth_maf_posterior[i_range, i]
+    #    }
+    #    i_arr <- data.table(i_arr)
+    #    arr[[i]] = (i_arr[,-1] * depth_maf_responsibilities[,i])
+    #  }
       
-      joint_probs <- lapply(arr, function(x){apply(x, 1, max, na.rm = T)}) %>% do.call(cbind, .)
-    }else{joint_probs <- depth_maf_posterior}
+    #  joint_probs <- lapply(arr, function(x){apply(x, 1, max, na.rm = T)}) %>% do.call(cbind, .)
+    #}else{joint_probs <- depth_maf_posterior}
+    
+    joint_probs <- depth_maf_posterior
     
     colnames(joint_probs) <- as.character(cns)
     
@@ -1044,6 +1057,22 @@ n50_fun <- function(lengths){
   return(lengths[1])
 }
 
+nx_fun <- function(lengths, n){
+  if(n < 0 | n > 1){
+    stop("Bad n value")
+  }
+  target <- sum(as.numeric(lengths))*n
+  lengths <- sort(lengths)
+  to_add <- lengths[1]
+  s_sum = to_add
+  while(s_sum < target){
+    to_add <- lengths[1]
+    lengths <- lengths[-1]
+    s_sum <- s_sum + to_add
+    #print(s_sum)
+  }
+  return(lengths[1])
+}
 
 len_fix <- function(x){
   if(length(x) == 0){
