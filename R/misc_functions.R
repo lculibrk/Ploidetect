@@ -394,7 +394,7 @@ match_kde_height <- function(data, means, sd, comparison_point = NA){
   }else if(length(means) == 1){
     kde_pad <- quantile(data, 0.999) - means
   }
-  kde_data <- density(data[data < (max(means))], n = 2^16)
+  kde_data <- density(data[data < (max(means))], n = 2^16, bw = "nrd0")
   
   ##Compute weights
   resp <- compute_responsibilities(data, means = means, variances = sd)
@@ -406,7 +406,7 @@ match_kde_height <- function(data, means, sd, comparison_point = NA){
   
   pdf_fun <- mixpdf_function(means = means, proportions = proportions, sd = sd)
   
-  plot_density_gmm(data, means, proportions, sd)
+  plot_density_gmm(data, means, proportions, sd, bw = "nrd0")
   
   ## PDF function probs at maxpeak position
   
@@ -1000,16 +1000,19 @@ maf_gmm_fit_subclonal_prior_segments <- function(depth_data, vaf_data, chr_vec, 
   
 }
 
-na_or_true <- function(x){
+na_or_true <- function(x, flip = F){
+  if(flip){
+    return(!(is.na(x)) & x)
+  }
   return((is.na(x)) | x)
 }
 
 
 
-plot_density_gmm <- function(data, means, weights, sd, ...){
+plot_density_gmm <- function(data, means, weights, sd, bw = "nrd0", ...){
   data <- data[data < max(means)]
   weights <- weights/sum(weights)
-  den <- density(data, n = 2^16)
+  den <- density(data, n = 2^16, bw = bw)
   pdf_fun <- mixpdf_function(means, weights, sd)
   den_pdf <- data.frame(x = den$x, y = den$y, prob = pdf_fun(den$x)$y)
   plot <- den_pdf %>% filter(x < max(means)) %>% ggplot(aes(x = x, y = y)) + geom_line() + geom_line(aes(x = x, y = prob, color = "Predicted")) + geom_vline(xintercept = means[means < max(data)], alpha = 0.1)
@@ -1104,5 +1107,303 @@ lowesswrapper <- function(x, y, bw){
   return(out)
 }
 
+ind_to_log <- function(vec, ind){
+  vec = rep(F, length(vec))
+  vec[ind] = T
+  return(vec)
+}
 
+estimateVariance <- function(to_seg, size = 10, compress_iters = 5, folds = 100){
+  orig_seg <- to_seg
+  var_list <- c()
+  for(fold in 1:folds){
+    to_seg <- orig_seg
+    iter_seg <- to_seg
+    lenseg <- length(to_seg)
+    centers = sort(sample(lenseg, size))
+    
+    while(any(centers <= compress_iters | centers >= lenseg - compress_iters | any(abs(diff(centers)) < compress_iters*2 + 1))){
+      print(centers)
+      centers = sort(sample(lenseg, size))
+    }
+    #orig_centers <- centers
+    to_seg <- unlist(lapply(centers, function(x){
+      to_seg[(x-compress_iters):(x+compress_iters)]
+    }))
+    centers <- seq(from = 1 + compress_iters, by = compress_iters*2 + 1, length.out = size)
+    lenseg <- length(to_seg)
+    n = rep(1, lenseg)
+    for(it in 1:(compress_iters)){
+      g <- graph(edges = c(1, rep(2:(lenseg - 1), each = 2), lenseg), directed = F)
+      ## Returns the left vs right side edge for the centers
+      keep <- centers - as.numeric(na_or_true((abs(to_seg/n - shift(to_seg/n, type = "lag")) < abs(to_seg/n - shift(to_seg/n, type = "lead"))), flip = T))[centers]
+      g <- delete_edges(g, E(g)[-keep])
+      to_seg <- data.table("d" = to_seg, "s" = components(g)$membership)[,.(d=sum(d)),by = s]$d
+      lenseg = length(to_seg)
+      centers = unique(components(g)$membership[centers])
+      n = rep(1, lenseg)
+      n[centers] = it + 1
+    }
+    segs <- split(which(rep(n, n) > 1), f = rep(1:length(centers), each = compress_iters + 1))
+    
+    var_list <- c(var_list, median(unlist(lapply(segs, function(x)sd(iter_seg[x])))))
+  }
+  return(median(var_list))
+}
+
+seg <- function(to_seg, lenseg, old_seg, n, transition_lik, init_var){
+  reference = to_seg
+  if(all(n == 1)){
+    vars = rep(init_var, lenseg)
+  }else{
+    v = data.table(cbind(reference, rep(1:length(n), n)))
+    print(v)
+    setnames(v, c("reference", "V2"))
+    v[,n:=.N, by = V2]
+    v[n > 2,v:=sd(reference), by = V2]
+    v[n <= 2, v:= init_var]
+    vars = v[,.(v = first(v)), by = V2]$v
+  }
+  to_seg = aggregate(reference, FUN = sum, by = list(rep(1:length(n), n)))[,2]
+  
+  while(lenseg < old_seg & lenseg > 1){
+    old_seg <- lenseg
+    g <- graph(edges = c(1, rep(2:(lenseg - 1), each = 2), lenseg), directed = F)
+    
+    lp <- zt_p(to_seg/n, shift(to_seg/n, type = "lag"), shift(vars, type = "lag"))[-1]
+
+    breaks <- which(lp < transition_lik)
+    
+    g <- delete_edges(g, breaks)
+    
+    to_seg <- data.table("d" = to_seg, "n" = n, "s" = components(g)$membership, "v" = vars)[,lapply(.SD, sum), by = s, .SDcols = 1:2]
+    #to_seg[,m:=mean(d), by = s][,v.i:= (d - m)^2]
+    
+    #to_seg[,n:=sum(n), by = s]
+    
+    #to_seg = to_seg[,.(d = sum(d), n = first(n), v = sqrt(sum(v.i)/(n-1))), by = s]
+    
+    
+    n <- to_seg$n
+    to_seg <- to_seg$d
+    lenseg = length(to_seg)
+    if(length(reference) != length(rep(1:length(n), n))){
+      print(length(reference))
+      print(n)
+    }  
+    v = data.table(cbind(reference, rep(1:length(n), n)))
+  
+    v[,n:=.N, by = V2]
+    v[n > 2,v:=sd(reference), by = V2]
+    v[n <= 2, v:= init_var]
+    vars = v[,.(v = first(v)), by = V2]$v
+  }
+  return(list(to_seg, lenseg, n))
+}
+seed_compress <- function(to_seg, compress_iters = 10, transition_lik = 0.01, var = estimateVariance(to_seg, size = 100, compress_iters = compress_iters)){
+  orig_seg <- to_seg
+  lenseg = length(to_seg)
+  old_seg <- Inf
+  n = rep(1, lenseg)
+  ## Segmentation using input variance estimate
+  r <- seg(to_seg, lenseg, old_seg, n, transition_lik = transition_lik, init_var = var)
+  old_seg <- lenseg
+  to_seg <- r[[1]]
+  lenseg <- r[[2]]
+  n <- r[[3]]
+  if(lenseg  == 1){
+    return(list("segs" = rep(1, times = length(orig_seg)), "ll" = sum(log(normpdf(orig_seg, mean = mean(orig_seg), sd = sd(orig_seg))))))
+  }
+
+  old_seg <- lenseg
+  ## Merge segments with size < compress iterations
+  for(minN in 1:compress_iters){
+    if(all(n > minN)){
+      next
+    }
+    while(any(n <= minN)){
+      #print(which(n <= minN))
+      lp <- zt_p(to_seg/n, shift(to_seg/n, type = "lag"), var)
+      lp[1] <- -1
+      ls <- zt_p(to_seg/n, shift(to_seg/n, type = "lead"), var)
+      ls[length(ls)] <- -1
+      lp <- lp[n <= minN]
+      ls <- ls[n <= minN]
+      transitions = pmin(lp, ls)
+      merge <- which(n <= minN) - as.numeric(ls < lp)
+      merge <- merge[order(transitions)[1]]
+      g <- graph(edges = c(1, rep(2:(lenseg - 1), each = 2), lenseg), directed = F)
+      g <- delete_edges(g, (1:length(E(g)))[-merge])
+      to_seg <- data.table("d" = to_seg, "n" = n, "s" = components(g)$membership)[,lapply(.SD, sum), by = s, .SDcols = 1:2]
+      n <- to_seg$n
+      to_seg <- to_seg$d
+      lenseg = length(to_seg)
+    }
+  }
+  
+  if(lenseg == 1){
+    return(list("segs" = rep(1, times = length(orig_seg)), "ll" = sum(log(normpdf(orig_seg, mean = mean(orig_seg), sd = sd(orig_seg))))))
+  }
+  
+  ## Rerun segmentation
+  if(F){
+    r <- seg(orig_seg, lenseg, old_seg, n, transition_lik = transition_lik, init_var = var)
+    old_seg <- lenseg
+    to_seg <- r[[1]]
+    lenseg <- r[[2]]
+    n <- r[[3]]
+  }
+  
+  
+  d <- data.table(orig_seg, "s" = rep(1:length(n), n))
+  d[,segged:=mean(orig_seg), by = s]
+  d[,v:=sd(orig_seg), by = s]
+
+  LL <- sum(log(normpdf(d$orig_seg, mean = d$segged, sd = d$v)))
+
+  return(list("segs" = rep(1:length(n), n), "ll" = LL))
+}
+
+cdf <- function(x, mean, sd){
+  pnorm(q = zt(x, mean, sd))
+}
+
+sweep_seeds <- function(to_seg, compress_iters = 10, transition_lik = 0.01, var = estimateVariance(to_seg, size = 100, compress_iters = 10)){
+  #target_var = var
+  ## Find variance for all = one segment
+  current_var = sd(to_seg)
+  
+  ## Bisection search
+  max_iters = 2^10
+  iter = 1
+  
+  ## Initial likelihood value
+  trans_lik = 0
+  ## If variance is too high, need to drop threshold (returns negative). Conversely if too low, need to up threshold (positive)
+  direction <- sign(current_var - vars[length(vars)])
+  vars <- c()
+  liks <- c()
+  lls <- c()
+  nsegs <- c()
+  for(trans_lik in seq(from = 0, to = 1, by = 0.01)){
+    #trans_lik = trans_lik + direction/2^iter
+    c = seed_compress(to_seg, compress_iters = 10, transition_lik = trans_lik, var)
+    condition = T
+    d <- data.table("d" = to_seg, "s" = c$segs, "n" = 1:length(to_seg))
+    ds <- d[,.(d = mean(d), v = sd(d)), by = s]
+    if(nrow(ds) == 1){
+      condition = F
+    }
+    while(condition){
+      ds <- ds[order(d)]
+      p <- ks.test(d[s == ds[1]$s]$d, d[s == ds[2]$s]$d, alternative = "greater")$p.value
+      if(p > 0.05){
+        d[s == ds[2]$s]$s <- d[s == ds[1]$s]$s[1]
+        ds[s == ds[2]$s]$s <- ds[s == ds[1]$s]$s
+      }else{
+        if(exists("done_dt")){
+          done_dt <- rbind(done_dt, d[s == ds[1]$s])
+        }else{
+          done_dt <- d[s == ds[1]$s]
+        }
+        d <- d[s != ds[1]$s]
+      }
+      ds <- d[,.(d = mean(d), v = sd(d)), by = s]
+      if(nrow(ds) == 1){
+        condition = F
+        done_dt <- rbind(done_dt, d[s == ds[1]$s])[order(n)]
+        d <- done_dt
+        rm(done_dt)
+      }
+    }
+    
+    d[,m:=mean(d), by = s]
+    d[,v:=sd(d), by = s]
+    c$ll <- sum(log(normpdf(d$d, mean = d$m, sd = d$v)))
+    nsegs <- c(nsegs, length(unique(d$s)))
+    liks <- c(liks, trans_lik)
+    lls <- c(lls, c$ll)
+    vars <- c(vars, median(data.table("d" = to_seg, "s" = c$segs)[,.(v = sd(d)), by = s]$v))
+    #direction <- sign(current_var - vars[length(vars)])
+    iter = iter + 1
+  }
+  aic = 2*nsegs - 2*log(exp(lls/length(to_seg)))
+  ## Find models with lowest aic
+  mins <- which(aic == min(aic))
+  
+}
+
+ks.seg <- function(to_seg, existing_segs, p){
+  #dt <- data.table(to_seg, existing_segs)
+  split_segs <- split(to_seg, f = existing_segs)
+  
+  n = table_vec(existing_segs)
+  
+  lp = unlist(lapply(2:length(split_segs), function(x){ks.test(split_segs[[x - 1]], split_segs[[x]])$p.value}))
+  
+  g <- graph(edges = c(1, rep(2:(length(unique(existing_segs)) - 1), each = 2), length(unique(existing_segs))), directed = F)
+  
+  g <- delete_edges(g, which(lp <= p))
+  
+  out_segs <- rep(components(g)$membership, n)
+  
+  if(length(unique(out_segs)) != length(unique(existing_segs)) & length(unique(out_segs)) > 1){
+    return(ks.seg(to_seg, out_segs, p))
+  }else{
+    return(out_segs)
+  }
+}
+
+
+seed_seg_existing <- function(to_seg, old_segs, existing_segs){
+  orig_dat <- to_seg
+  to_seg <- orig_dat
+  
+#  ks_examples <- split(to_seg, old_segs)
+  
+#  if(length(ks_examples) < 2){
+#    p_thresh = 0.01
+#  }else{
+#    p_thresh = unlist(lapply(2:length(ks_examples), function(x){ks.test(ks_examples[[x - 1]], ks_examples[[x]])$p.value}))
+#    p_thresh = max(p_thresh)
+#  }
+  p_thresh = 0.1
+
+  
+  
+  dt <- data.table(to_seg, existing_segs)
+  seg_var <- dt[,.(sd = sd(to_seg), n = .N), by = existing_segs]
+  n = seg_var$n
+  lenseg = length(to_seg)
+  
+  #var = estimateVariance(to_seg, compress_iters = round(lenseg/50), size = 100)
+  ## First merge length one segs
+  while(any(n < 2)){
+    to_seg <- dt[,.(to_seg = sum(to_seg)), by = existing_segs]$to_seg
+    lenseg = length(to_seg)
+    g <- graph(edges = c(1, rep(2:(lenseg - 1), each = 2), lenseg), directed = F)
+    lp <- abs(to_seg/n - shift(to_seg/n, type = "lag"))
+    lp[1] <- Inf
+    ls <- abs(to_seg/n - shift(to_seg/n, type = "lead"))
+    ls[length(ls)] <- Inf
+    merge <- which(n < 2) - as.numeric(lp < ls)[n < 2]
+    g <- delete_edges(g, (1:length(E(g)))[-merge])
+    to_seg <- data.table("d" = to_seg, "n" = n, "s" = components(g)$membership)[,lapply(.SD, sum), by = s, .SDcols = 1:2]
+    n <- to_seg$n
+    to_seg <- to_seg$d
+    lenseg = length(to_seg)
+  }
+  
+  segs <- rep(1:length(n), n)
+  
+  if(length(n) > 1){
+    segs <- ks.seg(orig_dat, segs, p_thresh)
+  }else{segs <- rep(1, n)}
+  return(segs)
+}
+  
+cn_from_dp <- function(dp, maxpeak, tp, ploidy){
+  (dp - get_coverage_characteristics(tp, ploidy, maxpeak)$homd)/get_coverage_characteristics(tp, ploidy, maxpeak)$diff
+}
 #' @import data.table
+#' 
