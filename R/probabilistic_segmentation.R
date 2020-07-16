@@ -1875,9 +1875,6 @@ one_segmenter <- function(in_list, in_models, bin_size = 100000){
     ks.test(binned_data[chr == x[1] & segment == x[2]]$corrected_depth, rnorm(10000, mean = depth(maxpeak, cov_char$diff, ploidy, as.numeric(x[9])), sd = as.numeric(x[7])))$p.value
   })
 }
-chr_t = 1
-plot_segments(binned_data[chr == chr_t]$pos, binned_data[chr == chr_t]$corrected_depth, binned_data[chr == chr_t]$segment)
-
 
 plot_segments <- function(pos, y, segments){
   seg_pos <- pos[segments != shift(segments)]
