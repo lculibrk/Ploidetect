@@ -829,7 +829,7 @@ if(F){
 }
 
 #' @export
-ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000){
+ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf){
   d_diff <- get_coverage_characteristics(tp, ploidy, maxpeak)$diff
   predictedpositions <- depth(maxpeak = maxpeak, d = d_diff, P = ploidy, n = 0:1000)
   
@@ -864,7 +864,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   #plot_density_gmm(data = segmented_data$corrected_depth, means = depth(maxpeak, diff(predictedpositions)[1], ploidy, as.numeric(names(joint_probs$jp_tbl))), weights = colSums(joint_probs$jp_tbl/rowSums(joint_probs$jp_tbl, na.rm = T), na.rm = T), sd = variance)
   
-  #lik_shift <- quantile(rowSums(abs(apply(joint_probs$jp_tbl, 2, diff))), prob = 0.8)
+  lik_shift <- quantile(rowSums(abs(apply(joint_probs$jp_tbl, 2, diff))), prob = 0.8)
   
   clonal_cnas <- ploidetect_prob_segmentator(prob_mat = joint_probs$jp_tbl, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = unlist(lapply(split(1:nrow(segmented_data), segmented_data$chr), function(x)1:length(x))), dist_vec = segmented_data$corrected_depth, lik_shift = lik_shift)
   clonal_cna_data <- segmented_data
@@ -873,7 +873,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   #gc_tbl <- data.table(all_data[,c("chr", "pos", "gc")])
   #gc_tbl$size <- all_data$end - all_data$pos
   clonal_cna_data <- data.table(clonal_cna_data)
-  clonal_cna_data %>% filter(chr == 1) %>% filter() %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(segment))) + geom_point() + scale_color_viridis(discrete = T)# + geom_point(aes(x = pos, y = segment_depth))
+  #clonal_cna_data %>% filter(chr == 1) %>% filter() %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)# + geom_point(aes(x = pos, y = segment_depth))
   
   
   
@@ -998,7 +998,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   subcl_seg$dev_pos <- subcl_seg$corrected_depth - subcl_pos
   
-  subcl_seg %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth)) + geom_point() + scale_color_viridis(discrete = F) + theme_cowplot() + xlab("Position") + ylab("Read Depth") + ggtitle("100kb Bins") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
+  #subcl_seg %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth)) + geom_point() + scale_color_viridis(discrete = F) + theme_cowplot() + xlab("Position") + ylab("Read Depth") + ggtitle("100kb Bins") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
   #subcl_seg %>% filter(chr == "X") %>% ggplot(aes(x = gc, y = dev_pos)) + geom_point() + geom_smooth(method = "loess", span = 0.5)
   
   #subcl_seg[,t_corrected_depth := lowesswrapper(x = gc, y = dev_pos, bw = 0.5)$residual + segment_depth, by = list(chr, segment)]
@@ -1017,7 +1017,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   subcl_seg %>% filter(chr == "6") %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(segment))) + geom_point() + scale_color_viridis(discrete = T)
   
-  plot_density_gmm(subcl_seg$corrected_depth, subcl_pos, weights = 1, sd = variance)
+  #plot_density_gmm(subcl_seg$corrected_depth, subcl_pos, weights = 1, sd = variance)
   
   split_segs <- split(subcl_seg, f = subcl_seg$chr)
   
@@ -1124,6 +1124,11 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     val <- iterations[i]
     
+    if(i > max_iters){
+      condition = F
+      break
+    }
+    
     if(val < min_size){
       condition = F
       break
@@ -1154,14 +1159,14 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     #current_segment_mappings[,corrected_depth:= lowesswrapper(x = gc, y = corrected_depth, bw = 1)$residual + median(corrected_depth), by = list(CN)]
     
-    current_segment_mappings %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis() + theme_cowplot() + xlab("Position") + ylab("Read Depth") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20)) + ggtitle("50kb Mapped Segments")
+    #current_segment_mappings %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis() + theme_cowplot() + xlab("Position") + ylab("Read Depth") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20)) + ggtitle("50kb Mapped Segments")
     #current_segment_mappings %>% filter(chr == "17") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis()
     
     #current_segment_mappings %>% group_by(chr, segment) %>% dplyr::summarise(v = sd(corrected_depth)) %>% ungroup %>% select(v) %>% unlist %>% mean(na.rm = T)
     #current_segment_mappings %>% group_by(chr, segment) %>% dplyr::summarise(v = sd(t_cor_dp)) %>% ungroup %>% select(v) %>% unlist %>% mean(na.rm = T)
     
     
-    current_segment_mappings %>% filter(chr == "3") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis()
+    #current_segment_mappings %>% filter(chr == "3") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis()
     
     
     iteration_positions <- subcl_pos/(unaltered/val)
@@ -1196,7 +1201,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     wt = compute_responsibilities(current_segment_mappings$corrected_depth, iteration_positions, iteration_var)
     
-    plot_density_gmm(data = current_segment_mappings$segment_depth, means = iteration_positions, weights = colSums(wt), sd = iteration_var)
+    #plot_density_gmm(data = current_segment_mappings$segment_depth, means = iteration_positions, weights = colSums(wt), sd = iteration_var)
     
     
     iteration_clonal_positions <- iteration_positions[which(as.numeric(names(iteration_positions)) == round(as.numeric(names(iteration_positions))))]
@@ -1205,7 +1210,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
         
 
     
-    current_segment_mappings %>% filter(chr == "3", corrected_depth, corrected_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)
+    #current_segment_mappings %>% filter(chr == "3", corrected_depth, corrected_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)
     
     
     mafstat <- current_segment_mappings[,.(vaf_sd = sd(unlist(unmerge_mafs(maf, flip = T))), n = length(na.omit(unmerge_mafs(maf)))), by = list(chr, segment)]
@@ -1492,15 +1497,17 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     previous_median_length <- current_median_length
     current_n50 <- n50_fun(seg_lens)
     current_median_length <- median(seg_lens)
+    
+    n50s = c(n50s, current_n50)
     #cn_calls <- data.table::copy(busted_jp_tbl$jp_tbl)
     #cn_calls <- cbind("chr" = busted_segment_mappings$chr, "segment" = busted_segment_mappings$segment, cn_calls)
     #cn_calls <- cn_calls[,lapply(.SD, mean), .SDcols = 3:ncol(cn_calls), by = list(chr, segment)]
     #cn_calls[,call:=as.numeric(names(cn_calls[,3:ncol(cn_calls)])[which.max(.SD)]), by = 1:nrow(cn_calls), .SDcols = 3:ncol(cn_calls)]
     #cn_calls <- cn_calls[,c(1:2, ncol(cn_calls)), with = F]
     #busted_segment_mappings <- cn_calls[busted_segment_mappings, on = c("chr", "segment")]
-    busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = CN == 0)) + geom_point() + scale_color_viridis(discrete = T)
-    busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
-    busted_segment_mappings %>% filter(chr == "1", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F, name = "Segment") + xlab("Position") + ylab("Read Depth") + theme_cowplot() + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
+    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = CN == 0)) + geom_point() + scale_color_viridis(discrete = T)
+    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
+    #busted_segment_mappings %>% filter(chr == "1", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F, name = "Segment") + xlab("Position") + ylab("Read Depth") + theme_cowplot() + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
     
     i = i + 1
     
