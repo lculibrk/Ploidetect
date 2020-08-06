@@ -1498,7 +1498,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     current_n50 <- n50_fun(seg_lens)
     current_median_length <- median(seg_lens)
     
-    n50s = c(n50s, current_n50)
+    #n50s = c(n50s, current_n50)
     #cn_calls <- data.table::copy(busted_jp_tbl$jp_tbl)
     #cn_calls <- cbind("chr" = busted_segment_mappings$chr, "segment" = busted_segment_mappings$segment, cn_calls)
     #cn_calls <- cn_calls[,lapply(.SD, mean), .SDcols = 3:ncol(cn_calls), by = list(chr, segment)]
