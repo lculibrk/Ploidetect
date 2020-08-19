@@ -106,12 +106,6 @@ compressdata_prob <- function(compress, criteria, dist_vec, subclones_discovered
   fits <- apply(rel_liks, 1, which.max)
   big_shift <- which(abs(diff(fits)) > 1)
   
-  #rel_liks <- compressed_compress/rowSums(compressed_compress)
-  
-  #rel_liks[apply(rel_liks, 1, function(x)all(is.na(x))),] <- 0
-  # Arrange data by position and remove tibble-ness
-  # Get differences between neighbouring points
-
   if(subclones_discovered){
     states <- apply(rel_liks, 1, which.max)
     state_probs <- apply(rel_liks, 1, max)
