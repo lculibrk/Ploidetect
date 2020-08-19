@@ -861,66 +861,32 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   ## Get the 80th percentile of likelihood shifts as a low bar for similarity
   lik_shift <- quantile(rowSums(abs(apply(joint_probs$jp_tbl, 2, diff))), prob = 0.8)
   
+  ## Segment genome based on 80th percentile of likelihoods
   clonal_cnas <- ploidetect_prob_segmentator(prob_mat = joint_probs$jp_tbl, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = unlist(lapply(split(1:nrow(segmented_data), segmented_data$chr), function(x)1:length(x))), dist_vec = segmented_data$corrected_depth, lik_shift = lik_shift)
   clonal_cna_data <- segmented_data
   clonal_cna_data$segment <- clonal_cnas
-  
-  
-  #clonal_cna_data$segment <- unlist(segs)
-  #gc_tbl <- data.table(all_data[,c("chr", "pos", "gc")])
-  #gc_tbl$size <- all_data$end - all_data$pos
-  clonal_cna_data <- data.table(clonal_cna_data)
-  #clonal_cna_data %>% filter(chr == 1) %>% filter() %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)# + geom_point(aes(x = pos, y = segment_depth))
-  
-  
-  
 
+  ## Convert to data.table for efficiency
+  clonal_cna_data <- data.table(clonal_cna_data)
   
+  ## Compute segmented depth
   clonal_cna_data[,segment_depth := median(corrected_depth), by = list(chr, segment)]
   
+  ## Call integer copy numbers
   clonal_cna_data[,CN:=round(cn_from_dp(segment_depth, maxpeak, tp, ploidy))]
   
-  #clonal_cna_data$CN <- cn_from_dp(clonal_cna_data$segment_depth, maxpeak, tp, ploidy)
-  
-  clonal_cna_data %>% filter(chr == "8") %>% filter() %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)# + geom_point(aes(x = pos, y = segment_depth))
-  
-  clonal_cna_data[CN < 0.5]
-  
-  #clonal_cna_data$row = 1:nrow(clonal_cna_data)
-  #gc_tbl <- clonal_cna_data[,c("chr", "pos", "row")][gc_tbl, on = list(chr, pos), roll = Inf]
-  #gc_tbl <- gc_tbl[,.(gc = mean(gc), size = sum(size)), by = row]
-  #gc_tbl <- gc_tbl[!is.na(row)]
-  #clonal_cna_data$gc <- gc_tbl$gc
-  #clonal_cna_data$size <- gc_tbl$size
-  
-  
-
-
-  #fit <- maf_gmm_fit(depth_data = segmented_data$segment_depth, vaf_data = segmented_data$maf, chr_vec = segmented_data$chr, means = predictedpositions, variances = variance, ploidy = ploidy, maxpeak = maxpeak, maf_variances = 0.06)
-  #clonal_cna_data$fit <- apply(joint_probs$jp_tbl, 1, which.max)
-  
-  #clonal_cna_data[,corrected_depth:= segment_depth + lowesswrapper(gc, corrected_depth, bw = 0.75)$residual, by = list(chr, segment)]
-  #clonal_cna_data[,segment_depth := median(corrected_depth), by = list(chr, segment)]
-  
-  #joint_probs <- list("jp_tbl" = data.table(parametric_gmm_fit(clonal_cna_data$segment_depth, means = predictedpositions, variances = variance)))
-  #lik_shift <- quantile(rowSums(abs(apply(joint_probs$jp_tbl, 2, diff))), prob = 0.95)
-  
-  #clonal_cnas <- ploidetect_prob_segmentator(prob_mat = joint_probs$jp_tbl, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = unlist(lapply(split(1:nrow(segmented_data), segmented_data$chr), function(x)1:length(x))), dist_vec = segmented_data$corrected_depth, lik_shift = 0.3)
-  #clonal_cna_data$segment <- clonal_cnas
-  #clonal_cna_data[,segment_depth := median(corrected_depth), by = list(chr, segment)]
-  
-  #clonal_cna_data %>% filter(chr == "X") %>% filter() %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F) + geom_point(aes(x = pos, y = segment_depth))
-  #clonal_cna_data %>% filter(fit == 10) %>% ggplot(aes(x = gc, y =corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)# + geom_line(aes(x = pos, y = gc * maxpeak*2)) + scale_y_continuous(sec.axis = sec_axis(trans = ~./(maxpeak*2)))
-  
-  #clonal_cna_data %>% filter(chr == "3") %>% ggplot(aes(x = pos, y = corrected_depth)) + geom_point() + geom_smooth(method = "loess", span = 1)
-  
-  predictedpositions <- depth(maxpeak = maxpeak, d = d_diff, P = ploidy, n = 0:10)
-  
-  subcl_seg <- segment_subclones(new_seg_data = clonal_cna_data, predictedpositions = predictedpositions, depth_variance = variance, vaf_variance = 0.06, maxpeak = maxpeak, tp = tp, ploidy = ploidy)
+  ## Subclonal-aware segmentation
+  subcl_seg <- segment_subclones(new_seg_data = clonal_cna_data, predictedpositions = predictedpositions[1:11], depth_variance = variance, vaf_variance = 0.06, maxpeak = maxpeak, tp = tp, ploidy = ploidy)
+  ## Extract estimated fraction for subclones; 0.25 or 0.5
   subclonal_fraction <- subcl_seg$fraction
+  ## Extract SD used for previous segmentation step
   subclonal_variance <- subcl_seg$subclonal_variance
+  ## Extract segment data.table
   subcl_seg <- subcl_seg$data[[1]]
+  ## Get which segments are predicted to be subclonal
   subcl_seg$subclonal <- (as.numeric(subcl_seg$CN) - round(subcl_seg$CN)) != 0
+  
+  
   subcl_seg[CN - round(CN) != 0][,.(pos = first(pos), end = last(end)), by = list(chr, segment)]
   subcl_seg %>% filter(chr == "6") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
   
