@@ -830,45 +830,42 @@ if(F){
 
 #' @export
 ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf){
+  
+  ## Get estimated differential depth
   d_diff <- get_coverage_characteristics(tp, ploidy, maxpeak)$diff
+  
+  ## Get estimated positions for up to 1000-fold amplification
   predictedpositions <- depth(maxpeak = maxpeak, d = d_diff, P = ploidy, n = 0:1000)
   
+  ## Filter positions for ones which actually exist
   predictedpositions <- predictedpositions[predictedpositions < max(segmented_data$corrected_depth)]
   
+  ## Estimate variance based on KDE matching
   variance <- density(segmented_data$corrected_depth)$bw
   variance <- match_kde_height(segmented_data$corrected_depth, means = predictedpositions, sd = variance)
 
+  ##Compute KDE weights
   proportions <- compute_responsibilities(segmented_data$corrected_depth, means = predictedpositions, variances = variance)
   proportions <- colSums(proportions)/sum(colSums(proportions))
   
+  ## Recompute ploidy & point of highest density
   ploidy <- as.numeric(names(proportions)[which.max(proportions)])
   maxpeak <- predictedpositions[which.max(proportions)]
   
+  ## Recompute var based on parameters
   variance <- match_kde_height(segmented_data$corrected_depth, means = predictedpositions, sd = variance, comparison_point = maxpeak)
-  #var_est_chrs <- unlist(lapply(split(segmented_data$corrected_depth, f = segmented_data$chr), sd))
-  
-  #var_est_chrs <- names(var_est_chrs[var_est_chrs < median(var_est_chrs)])
-  
-  #variance <- estimateVariance(to_seg = segmented_data[chr %in% var_est_chrs]$corrected_depth, size = 10, compress_iters = 100, folds = 100)
-  
-  #segs <- lapply(split(segmented_data$corrected_depth, f = segmented_data$chr), seed_compress, compress_iters = 3, transition_lik = zt_p(obs = 0, mean = diff(predictedpositions)[1]/4, variance), var = variance)
-  
-  #segs <- lapply(segs, function(x)x$segs)
-  #segs <- seed_compress(to_seg = segmented_data[chr == 1]$corrected_depth, size = 10, compress_iters = 3, subcl_shift = diff(predictedpositions)[1]/4)
-  
-  
-  #joint_probs <- maf_gmm_fit(depth_data = segmented_data$corrected_depth, vaf_data = segmented_data$maf, chr_vec = segmented_data$chr, means = predictedpositions, variances = variance, ploidy = ploidy, maxpeak = maxpeak, maf_variances = 0.06)
-  
+
+  ## Compute likelihoods based on GMM fit
   joint_probs <- list("jp_tbl" = data.table(parametric_gmm_fit(segmented_data$corrected_depth, means = predictedpositions, variances = variance)))
   
-  
-  #plot_density_gmm(data = segmented_data$corrected_depth, means = depth(maxpeak, diff(predictedpositions)[1], ploidy, as.numeric(names(joint_probs$jp_tbl))), weights = colSums(joint_probs$jp_tbl/rowSums(joint_probs$jp_tbl, na.rm = T), na.rm = T), sd = variance)
-  
+  ## Get the 80th percentile of likelihood shifts as a low bar for similarity
   lik_shift <- quantile(rowSums(abs(apply(joint_probs$jp_tbl, 2, diff))), prob = 0.8)
   
   clonal_cnas <- ploidetect_prob_segmentator(prob_mat = joint_probs$jp_tbl, ploidy = ploidy, chr_vec = segmented_data$chr, seg_vec = unlist(lapply(split(1:nrow(segmented_data), segmented_data$chr), function(x)1:length(x))), dist_vec = segmented_data$corrected_depth, lik_shift = lik_shift)
   clonal_cna_data <- segmented_data
   clonal_cna_data$segment <- clonal_cnas
+  
+  
   #clonal_cna_data$segment <- unlist(segs)
   #gc_tbl <- data.table(all_data[,c("chr", "pos", "gc")])
   #gc_tbl$size <- all_data$end - all_data$pos
@@ -1883,7 +1880,10 @@ one_segmenter <- function(in_list, in_models, bin_size = 100000){
   })
 }
 
-plot_segments <- function(pos, y, segments){
+plot_segments <- function(chr_vec, chr, pos, y, segments){
+  pos = pos[chr_vec == chr]
+  y = y[chr_vec == chr]
+  segments = segments[chr_vec == chr]
   seg_pos <- pos[segments != shift(segments)]
   p = data.frame(pos, y) 
   p = p %>% ggplot(aes(x= pos, y = y, color = segments)) + geom_point() + geom_vline(xintercept = seg_pos, alpha=0.1) + scale_color_viridis()
