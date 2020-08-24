@@ -1163,7 +1163,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     
     
-    wt = compute_responsibilities(current_segment_mappings$corrected_depth, iteration_positions, iteration_var)
+    wt = compute_responsibilities(current_segment_mappings$corrected_depth, iteration_positions, iteration_var_nonmod)
     
     #plot_density_gmm(data = current_segment_mappings$segment_depth, means = iteration_positions, weights = colSums(wt), sd = iteration_var)
     
@@ -1186,7 +1186,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     current_segment_mappings
     
     
-    current_segment_mappings$CN <- as.numeric(names(iteration_positions))[apply(parametric_gmm_fit(data = current_segment_mappings$segment_depth, means = iteration_positions, variances = iteration_var), 1, which.max)]
+    current_segment_mappings$CN <- as.numeric(names(iteration_positions))[apply(parametric_gmm_fit(data = current_segment_mappings$segment_depth, means = iteration_positions, variances = iteration_var_nonmod), 1, which.max)]
     
     current_segment_mappings %>% filter(chr == "18", corrected_depth < 1e+05) %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
     
