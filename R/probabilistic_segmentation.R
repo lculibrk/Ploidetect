@@ -839,7 +839,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   ## Ensure predictedpositions has at least CNs 0-10
   if(any(!as.character(0:10) %in% names(predictedpositions))){
-    missing = 0:10[!as.character(0:10) %in% names(predictedpositions)]
+    missing = (0:10)[!as.character(0:10) %in% names(predictedpositions)]
     predictedpositions = sort(c(predictedpositions, depth(maxpeak, d_diff, ploidy, n = missing)))
   }
   
