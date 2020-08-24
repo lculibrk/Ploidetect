@@ -1,3 +1,7 @@
+get_good_var = function(mean1, mean2){
+  sig = sqrt(((mean2 - mean1)^2)/(2 * log(9)))
+  return(sig)
+}
 ploidetect_prob_segmentator <- function(prob_mat, ploidy, chr_vec, seg_vec, dist_vec, verbose = T, lik_shift = 1, subclones_discovered = F){
   if(verbose){
     message("Performing segmentation and copy number variant calling")
@@ -1244,11 +1248,6 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     #fill_cols <- data.table(matrix(0, ncol = length(iteration_subclonal_positions), nrow = nrow(current_joint_probs$jp_tbl)))
     #colnames(fill_cols) <- names(iteration_subclonal_positions)
     segged_joint_probs <- maf_gmm_fit_subclonal_prior_segments(depth_data = current_segment_mappings$segment_depth, vaf_data = current_segment_mappings$maf, chr_vec = current_segment_mappings$chr, means = iteration_positions, variances = iteration_var, ploidy = ploidy, maxpeak = iteration_maxpeak, maf_variances = maf_variance, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
-    
-    get_good_var = function(mean1, mean2){
-      sig = sqrt(((mean2 - mean1)^2)/(2 * log(9)))
-      return(sig)
-    }
     
     
     current_joint_probs <- current_joint_probs$jp_tbl
