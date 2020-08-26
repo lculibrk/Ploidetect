@@ -1074,7 +1074,10 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   base_characteristics <- get_coverage_characteristics(tp, ploidy, maxpeak_base)
   
   previous_segment_mappings <- data.table::copy(initial_segment_mappings)
-  overseg_mappings = data.table::copy(previous_segment_mappings)
+  overseg_mappings = data.table::copy(subcl_seg)
+  overseg_mappings = overseg_mappings[,.(chr = chr, segment = segment, pos = pos, CN = CN, merge_vec = 1:.N, end = end, corrected_depth = corrected_depth, maf = maf, gc = 0.5, segment_depth = segment_depth, fine_call = CN, flagged = F, match = F, call = CN)]
+  
+  
   
   seg_lens <- previous_segment_mappings[,.("pos" = first(pos), "end" = last(end)), by = list(chr, segment)][,.(diff=end-pos)]$diff
   seg_lens <- seg_lens[seg_lens > 0]
@@ -1535,10 +1538,6 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     plot_segments(busted_segment_mappings$chr, 1, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
   }
   
-  
-  
-  
-  out_seg_mappings %>% filter(chr == "1", segment_depth < max(subcl_pos/(unaltered/val))) %>% ggplot(aes(x = pos, y = segment_depth)) + geom_point() + scale_color_viridis(discrete = F)
   
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
