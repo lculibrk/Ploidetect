@@ -1074,6 +1074,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   base_characteristics <- get_coverage_characteristics(tp, ploidy, maxpeak_base)
   
   previous_segment_mappings <- data.table::copy(initial_segment_mappings)
+  overseg_mappings = data.table::copy(previous_segment_mappings)
   
   seg_lens <- previous_segment_mappings[,.("pos" = first(pos), "end" = last(end)), by = list(chr, segment)][,.(diff=end-pos)]$diff
   seg_lens <- seg_lens[seg_lens > 0]
@@ -1081,6 +1082,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   current_median_length <- median(seg_lens)
   
   subclonal_seg_mappings <- setnames(rbindlist(seg_mappings), old = "call", new = "CN")
+
   
   condition = T
   i = 1
