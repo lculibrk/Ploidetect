@@ -1433,10 +1433,13 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       
       
       ends_tbl <- busted_segment_mappings[tot_ends]
+      
       ends_tbl$ind <- 1:nrow(ends_tbl)
       
       if(nrow(bad_seg_maps) > 0){
-        new_ends <- tot_ends[-ends_tbl[bad_seg_maps,, on = c("chr", "segment")]$ind]
+        filt_ends = ends_tbl[bad_seg_maps,, on = c("chr", "segment")]$ind
+        filt_ends = filt_ends[!is.na(filt_ends)]
+        new_ends <- tot_ends[-filt_ends]
       }else{
         new_ends <- tot_ends
       }
