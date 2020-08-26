@@ -1283,7 +1283,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     set.seed(42069)
     simulation_results = c()
     for(z in 1:10){
-      simulated_seg = rnorm(10000, mean = iteration_clonal_positions[names(iteration_clonal_positions) == ploidy], sd = iteration_var_nonmod)
+      simulated_seg = rnorm(10000, mean = iteration_clonal_positions[names(iteration_clonal_positions) == round(ploidy)], sd = iteration_var_nonmod)
       simulated_segged = parametric_gmm_fit(rep(mean(simulated_seg), length(simulated_seg)), means = iteration_clonal_positions, variances = iteration_var)
       simulated_segged = simulated_segged/rowSums(simulated_segged)
       simulated_nonsegged = parametric_gmm_fit(simulated_seg, means = iteration_clonal_positions, variances = iteration_var)
