@@ -1285,6 +1285,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     set.seed(42069)
     simulation_results = c()
     sim_var = max(current_segment_mappings[,.(v = sd(corrected_depth), s = sum(end - pos), m = mean(corrected_depth)), by = c("CN")][order(CN)][s > quantile(s, 0.75)]$v)
+    #sim_var = iteration_var_nonmod
     for(z in 1:10){
       simulated_seg = rnorm(10000, mean = iteration_clonal_positions[names(iteration_clonal_positions) == round(ploidy)], sd = sim_var)
       simulated_segged = parametric_gmm_fit(rep(mean(simulated_seg), length(simulated_seg)), means = iteration_clonal_positions, variances = iteration_var)
@@ -1298,7 +1299,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     break_metric = median(simulation_results)
     plot(density(simulated_thresh))
     
-    ggplot(data.frame(simulated_seg), aes(x = 1:length(simulated_seg), y = simulated_seg, color = simulated_thresh > break_metric)) + geom_point() + scale_color_viridis(discrete = T)
+    ggplot(data.frame(simulated_seg), aes(x = 1:length(simulated_seg), y = simulated_seg, color = abs(simulated_seg - median(simulated_seg)) >= get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff)) + geom_point() + scale_color_viridis(discrete = T) + theme(legend.position = "none")
     #quantile(metric, prob = c(0.9, 0.95, 0.975, 0.98, 0.99, 0.999, 0.99999))
     
     if(ncol(segged_joint_resps) < ncol(current_joint_resps)){
@@ -1534,7 +1535,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     plot_segments(busted_segment_mappings$chr, 2, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
   }
   
-  plot_segments(out_seg_mappings$chr, 16, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
+  plot_segments(out_seg_mappings$chr, 13, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
   
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
