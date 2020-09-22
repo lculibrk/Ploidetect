@@ -1291,15 +1291,17 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       simulated_segged = parametric_gmm_fit(rep(mean(simulated_seg), length(simulated_seg)), means = iteration_clonal_positions, variances = iteration_var)
       simulated_segged = simulated_segged/rowSums(simulated_segged)
       simulated_nonsegged = parametric_gmm_fit(simulated_seg, means = iteration_clonal_positions, variances = iteration_var)
+      zeroes = which(rowSums(simulated_nonsegged) == 0)
       simulated_nonsegged = simulated_nonsegged/rowSums(simulated_nonsegged)
+      simulated_nonsegged[zeroes,] = 0
       simulated_thresh = rowSums(abs(simulated_segged - simulated_nonsegged))
       simulation_results = c(simulation_results, max(simulated_thresh[-which.max(simulated_thresh)]))
     }
     
     break_metric = median(simulation_results)
-    plot(density(simulated_thresh))
+    #plot(density(simulated_thresh))
     
-    ggplot(data.frame(simulated_seg), aes(x = 1:length(simulated_seg), y = simulated_seg, color = abs(simulated_seg - median(simulated_seg)) >= get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff)) + geom_point() + scale_color_viridis(discrete = T) + theme(legend.position = "none")
+    #ggplot(data.frame(simulated_seg), aes(x = 1:length(simulated_seg), y = simulated_seg, color = abs(simulated_seg - median(simulated_seg)) >= get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff)) + geom_point() + scale_color_viridis(discrete = T) + theme(legend.position = "none")
     #quantile(metric, prob = c(0.9, 0.95, 0.975, 0.98, 0.99, 0.999, 0.99999))
     
     if(ncol(segged_joint_resps) < ncol(current_joint_resps)){
