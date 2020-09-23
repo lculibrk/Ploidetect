@@ -1284,7 +1284,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     ## Monte carlo simulation of the null hypothesis
     set.seed(42069)
     simulation_results = c()
-    sim_var = max(current_segment_mappings[,.(v = sd(corrected_depth), s = sum(end - pos), m = mean(corrected_depth)), by = c("CN")][order(CN)][s > quantile(s, 0.75)]$v)
+    sim_var = max(current_segment_mappings[,.(v = as.double(sd(corrected_depth)), s = as.double(sum(end - pos)), m = as.double(mean(corrected_depth))), by = c("CN")][order(CN)][s > quantile(s, 0.75)]$v)
     #sim_var = iteration_var_nonmod
     for(z in 1:10){
       simulated_seg = rnorm(10000, mean = iteration_clonal_positions[names(iteration_clonal_positions) == round(ploidy)], sd = sim_var)
@@ -1537,7 +1537,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     plot_segments(busted_segment_mappings$chr, 2, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
   }
   
-  plot_segments(out_seg_mappings$chr, 13, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
+  plot_segments(out_seg_mappings$chr, 2, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
   
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
