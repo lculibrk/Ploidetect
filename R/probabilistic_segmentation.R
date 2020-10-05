@@ -1284,21 +1284,54 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     ## Monte carlo simulation of the null hypothesis
     set.seed(42069)
     simulation_results = c()
+    
+    v_tbl = current_segment_mappings[,.(v = as.double(sd(corrected_depth)), s = as.double(sum(end - pos)), m = as.double(mean(corrected_depth))), by = c("CN")][order(CN)]
+    
+    #if(nrow(v_tbl[s > quantile(s, 0.75)]) >= 3){
+      
+    #}
+    
     sim_var = max(current_segment_mappings[,.(v = as.double(sd(corrected_depth)), s = as.double(sum(end - pos)), m = as.double(mean(corrected_depth))), by = c("CN")][order(CN)][s > quantile(s, 0.75)]$v)
+    
+    
+    if(nrow(v_tbl[s > quantile(s, 0.75)]) >= 3){
+      lm_var = lm(v ~ CN, data = v_tbl[s > quantile(s, 0.75)], weights = s)
+    }else{
+      lm_var = lm(v ~ CN, data = data.table(CN = c(ploidy - 1, ploidy, ploidy + 1), v = rep(v_tbl[which.max(s)]$v, 3)))
+    }
+    #lm()
+    #sim_var = max(sim_var, iteration_var_nonmod)
     #sim_var = iteration_var_nonmod
-    for(z in 1:10){
-      simulated_seg = rnorm(10000, mean = iteration_clonal_positions[names(iteration_clonal_positions) == round(ploidy)], sd = sim_var)
-      simulated_segged = parametric_gmm_fit(rep(mean(simulated_seg), length(simulated_seg)), means = iteration_clonal_positions, variances = iteration_var)
+    ## Function to perform a round of MC simulation for a segment with no true breakpoints
+    simulate_threshold = function(median_depth, segment_variance, model_variance, component_means, sim_size = 10000){
+      simulated_seg = rnorm(sim_size, mean = median_depth, sd = segment_variance)
+      simulated_segged = parametric_gmm_fit(rep(mean(simulated_seg), sim_size), means = component_means, variances = model_variance)
       simulated_segged = simulated_segged/rowSums(simulated_segged)
-      simulated_nonsegged = parametric_gmm_fit(simulated_seg, means = iteration_clonal_positions, variances = iteration_var)
+      simulated_nonsegged = parametric_gmm_fit(simulated_seg, means = component_means, variances = model_variance)
       zeroes = which(rowSums(simulated_nonsegged) == 0)
       simulated_nonsegged = simulated_nonsegged/rowSums(simulated_nonsegged)
       simulated_nonsegged[zeroes,] = 0
       simulated_thresh = rowSums(abs(simulated_segged - simulated_nonsegged))
-      simulation_results = c(simulation_results, max(simulated_thresh[-which.max(simulated_thresh)]))
+      return(max(simulated_thresh[-which.max(simulated_thresh)]))
     }
     
-    break_metric = median(simulation_results)
+    thresh_by_cn = lapply(v_tbl$CN[v_tbl$CN == round(v_tbl$CN)], function(sim_cn){
+      simulation_results = rep(NA, 10)
+      for(z in 1:10){
+        simulation_results[z] = simulate_threshold(iteration_clonal_positions[names(iteration_clonal_positions) == sim_cn], predict(lm_var, data.table(CN = sim_cn)), iteration_var, iteration_clonal_positions)
+      }
+      return(structure(median(simulation_results), names = sim_cn))
+    })
+    thresh_by_cn = data.table("t" = unlist(thresh_by_cn), "CN" = as.numeric(names(unlist(thresh_by_cn))))
+    
+    
+    #simulation_results = rep(NA, 10)
+    #for(z in 1:10){
+    #  simulation_results[z] = simulate_threshold(iteration_clonal_positions[names(iteration_clonal_positions) == ploidy], sim_var, iteration_var, iteration_clonal_positions)
+    #}
+    
+    
+    #break_metric = median(simulation_results)
     #plot(density(simulated_thresh))
     
     #ggplot(data.frame(simulated_seg), aes(x = 1:length(simulated_seg), y = simulated_seg, color = abs(simulated_seg - median(simulated_seg)) >= get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff)) + geom_point() + scale_color_viridis(discrete = T) + theme(legend.position = "none")
@@ -1308,13 +1341,23 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       segged_joint_resps[,names(current_joint_resps)[!names(current_joint_resps) %in% names(segged_joint_resps)]] <- 0
     }
     
+    metric_df = data.table("metric" = metric, "CN" = round(current_segment_mappings$CN))
     
-    current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob >= break_metric)) + geom_point() + scale_color_viridis(discrete = T, name = "Flagged") + xlab("Position") + ylab("Read Depth") + theme_cowplot()
-    #current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "13") %>% ggplot(aes(x = pos, y = corrected_depth, color = apply(segged_joint_resps, 1, which.max))) + geom_point() + scale_color_viridis(discrete = F)
-    #current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "13") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
+    metric_df = thresh_by_cn[metric_df, on = "CN"]
     
+    breaks = metric_df$metric >= metric_df$t
     
-    current_segment_mappings$flagged <- (metric >= break_metric) | abs(current_segment_mappings$corrected_depth - current_segment_mappings$segment_depth) > get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff*2
+    current_segment_mappings %>% mutate("prob" = breaks) %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = T, name = "Flagged") + xlab("Position") + ylab("Read Depth") + theme_cowplot()
+    current_segment_mappings %>% mutate("prob" = metric_df$metric) %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = F)
+    current_segment_mappings %>% mutate("prob" = apply(current_joint_resps, 1, max)) %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = F)
+    
+    plot_segments(current_segment_mappings$chr, 10, current_segment_mappings$pos, current_segment_mappings$corrected_depth, current_segment_mappings$segment)
+    
+    #old flagging
+    #current_segment_mappings$flagged <- (metric >= break_metric) | abs(current_segment_mappings$corrected_depth - current_segment_mappings$segment_depth) > get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff*2
+    # new flagging
+    
+    current_segment_mappings$flagged <- breaks | abs(current_segment_mappings$corrected_depth - current_segment_mappings$segment_depth) > get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff*2
     
     
     edge_vec <- c(1, rep(2:(nrow(current_segment_mappings)-1), each = 2), nrow(current_segment_mappings))
@@ -1534,10 +1577,10 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       out_seg_mappings <- data.table::copy(previous_segment_mappings)
       previous_segment_mappings <- previous_segment_mappings[,.(pos = first(pos), CN = median(CN)), by = list(chr, segment)]
     }
-    plot_segments(busted_segment_mappings$chr, 2, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
+    plot_segments(busted_segment_mappings$chr, 10, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
   }
   
-  plot_segments(out_seg_mappings$chr, 2, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
+  plot_segments(out_seg_mappings$chr, 10, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
   
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
