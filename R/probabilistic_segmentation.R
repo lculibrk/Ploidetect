@@ -869,6 +869,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   clonal_cna_data <- segmented_data
   clonal_cna_data$segment <- clonal_cnas
   
+  
   ## Convert to data.table for efficiency
   clonal_cna_data <- data.table(clonal_cna_data)
   
