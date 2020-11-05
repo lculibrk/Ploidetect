@@ -3,135 +3,144 @@ get_good_var = function(mean1, mean2, base){
   return(sig)
 }
 ploidetect_prob_segmentator <- function(prob_mat, ploidy, chr_vec, seg_vec, dist_vec, verbose = T, lik_shift = 1, subclones_discovered = F){
+  ## Verbosity statement
   if(verbose){
     message("Performing segmentation and copy number variant calling")
   }
+  ## Standardizing the input data
   if(!all(c("chr", "seg") %in% names(prob_mat))){
     prob_mat <- cbind(prob_mat, "chr" = chr_vec, "seg" = seg_vec)
   }
   
+  ## Keep a copy of the initial matrix
   orig_mat <- data.table::copy(prob_mat)
   
+  ## Make a copy that will be converted to posteriors
   resp_mat <- data.table::copy(prob_mat)
   
+  ## remove the chr, seg columns from resp_mat to calc the posteriors
   resp_mat <- resp_mat[,-((ncol(resp_mat)-1):ncol(resp_mat))]
   
-  print(resp_mat)
-  
+  ## Calculate posteriors
   resp_mat <- resp_mat/rowSums(resp_mat)
   
+  ## Correct divisions by zero
   resp_mat[which(is.na(resp_mat[,1])),] <- 0
   
+  ## Take the mean over the input segments
   compressed_mat <- resp_mat[, lapply(.SD, mean), by = list(orig_mat$chr, orig_mat$seg)]
   
+  ## Remove chr, seg columns that were introduced in the previous line
   compressed_mat <- compressed_mat[,-c(1:2)]
-  if(nrow(compressed_mat) < nrow(orig_mat)){
-    states <- apply(compressed_mat, 1, which.max)
-    state_transitions <- data.frame("leading" = states[-1], "lagging" = states[1:(length(states)-1)])
-    state_transitions <- split(state_transitions, f = 1:nrow(state_transitions))
-    state_transitions <- lapply(state_transitions, unlist)
-    
-    shifted <- lagged_df(compressed_mat)
-    shifted <- shifted[-nrow(shifted),]
-    
-    #transition_liks <- lapply(1:length(state_transitions), function(x){
-    #  sum(abs(compressed_mat[x,state_transitions[[x]], with = F]/sum(compressed_mat[x,state_transitions[[x]], with = F]) - shifted[x, state_transitions[[x]], with = F]/sum(shifted[x, state_transitions[[x]], with = F])))
-    #})
-    
-    #transition_liks <- unlist(transition_liks)
-    #transition_liks <- transition_liks[!na_or_true(transition_liks == 0)]
-    
-    all_transitions <- apply(compressed_mat, 2, diff) %>% abs %>% apply(1, sum)
-    transition_threshold <- min(1.5, quantile(all_transitions[all_transitions > 0.5], prob = 0.5))
-  }else{transition_threshold = lik_shift}
   
-  if(is.null(nrow(prob_mat))){
-    print(prob_mat)
-  }
+  ## Checks if the matrix has shrunk at all i.e. if the input was previously segmented
+  if(nrow(compressed_mat) < nrow(orig_mat)){
+    ## get the MLE GMM component for each segment
+    states <- apply(compressed_mat, 1, which.max)
+    ## Create a leading/lagging data.table to allow for checking for transitions between components
+    state_transitions <- data.frame("leading" = states[-1], "lagging" = states[1:(length(states)-1)])
+    ## Split the data.table at each row
+    state_transitions <- split(state_transitions, f = 1:nrow(state_transitions))
+    ## Convert each resultant list element to a vector
+    state_transitions <- lapply(state_transitions, unlist)
+    ## Get diff of each column in each row
+    all_transitions <- apply(abs(apply(compressed_mat, 2, diff)), 1, sum)
+    ## Get transition threshold - either 50th percentile of possible transitions, or 1.5, whichever is lower.
+    transition_threshold <- min(1.5, quantile(all_transitions[all_transitions > 0.5], prob = 0.5))
+    ## If the data is uncompressed, use the shift specified in the function call
+  }else{transition_threshold = lik_shift}
+  ## Build data.table for input to the segmentation function
   prob_mat$chr <- chr_vec
   prob_mat$seg <- seg_vec
   prob_mat$dist <- dist_vec
+  ## Set NAs to 0
   prob_mat[which(is.na(prob_mat[,1])),] <- 0
+  ## Split by chromosome
   datsplit <- split(as.data.frame(prob_mat), prob_mat$chr)
-  ## Run segmentation by compression on all chromosomes
+  ## Verbosity statement
   if(verbose){
     message("Performing segmentation of copy number data")
   }
+  ## Run runiterativecompression_prob on data
   compressedalldat <- unlist(lapply(datsplit, runiterativecompression_prob, segmentation_threshold = transition_threshold, verbose = verbose, subclones_discovered = subclones_discovered))
   return(compressedalldat)
 }
 
 runiterativecompression_prob <- function(data, segmentation_threshold = segmentation_threshold, verbose = F, subclones_discovered = F){
-  
+  ## Verbosity statement
   if(verbose){
     message("Running iterative compression to segment read depth data")
   }
+  ## Define segments and the raw distance
   segments <- data$seg
   dist = data$dist
   
+  ## Separate data from metadata
   data <- data[,-which(names(data) %in% c("chr", "seg", "dist"))]
-  message(paste0("Initial segment count: ", length(unique(segments))))
+  ## Verbosity statement
+  if(verbose){
+    message(paste0("Initial segment count: ", length(unique(segments))))
+  }
+  ## Set initial conditions - i.e. not converged, generate initial data.table, and split by segment.
   converged <- F
   compress <- data.table(data)
   compress <- split(compress, f = segments)
+  ## If a single segment was input
   if(length(compress) == 1){
     converged = T
   }
   
-  
   while(!converged){
+    ## Record number of segments pre-segmentation
     windows <- length(compress)
-    
+    ## Run an iteration of compression segmentation using the input threshold
     compress <- compressdata_prob(compress, criteria = segmentation_threshold, dist_vec = dist, subclones_discovered = subclones_discovered)
-    
-    
+    ## Check if we've converged or if there's only one segment left
     if(length(compress) == windows | length(compress) == 1){
       converged <- T
     }
   }
+  ## Output the segment mappings
   segs <- rep(1:length(compress), times = lapply(compress, nrow))
   return(segs)
 }
 
 compressdata_prob <- function(compress, criteria, dist_vec, subclones_discovered = F){
+  ## Find length of input data
   reps <- lapply(compress, nrow)
+  ## Get segment mappings
   ids = rep(x = 1:length(reps), times = unlist(reps))
-  
+  ## Record original raw distances
   dists_original <- dist_vec
-  
+  ## Get segmented distances
   dists <- aggregate(dist_vec, list(ids), FUN = mean)
-  
+  ## data.table of data to be segmented
   compress_original = rbindlist(compress)
-  
+  ## Average the data by segment
   compressed_compress <- compress_original[, lapply(.SD, mean), by = factor(ids)][,-1]
-  
+  ## Copy the averaged data so we can do stuff with it
   rel_liks <- data.table::copy(compressed_compress)
-  
+  ## Get maximum likelihood fit for each segment
   fits <- apply(rel_liks, 1, which.max)
+  ## Look for regions which shift by at more than one component
   big_shift <- which(abs(diff(fits)) > 1)
-  
-  #rel_liks <- compressed_compress/rowSums(compressed_compress)
-  
-  #rel_liks[apply(rel_liks, 1, function(x)all(is.na(x))),] <- 0
-  # Arrange data by position and remove tibble-ness
-  # Get differences between neighbouring points  
+  ## If we've already found subclones
   if(subclones_discovered){
+    ## Get vector of states
     states <- apply(rel_liks, 1, which.max)
+    ## Get maximum likelihood for each segment
     state_probs <- apply(rel_liks, 1, max)
-    state_transitions <- data.frame("leading" = states[-1], "lagging" = states[1:(length(states)-1)])
-    state_transitions <- split(state_transitions, f = 1:nrow(state_transitions))
-    state_transitions <- lapply(state_transitions, unlist)
+    ## Get lagged data.table of data
     shifted <- lagged_df(rel_liks)
+    ## Transform to data.frame
     t_liks <- as.data.frame(rel_liks)
+    ## Vector of GMM fits
+    state_vec <- 1:length(fits)
+    ## Make vectors that return the current best & the following segment's best fit
+    fit_val <- vapply(1:length(fits), function(x){t_liks[x,fits[x]]}, 0.01)
+    fit_next <- vapply(1:length(fits), function(x){t_liks[x,c(fits, 1)[x+1]]}, 0.01)
     
-    state_vec <- 1:length(states)
-    
-    
-    
-    
-    fit_val <- vapply(1:length(states), function(x){t_liks[x,states[x]]}, 0.01)
-    fit_next <- vapply(1:length(states), function(x){t_liks[x,c(states, 1)[x+1]]}, 0.01)
-    
+    ## Bind them to make a lagged data.frame
     fit_df <- cbind(fit_val, fit_next)
     fit_df <- fit_df/rowSums(fit_df)
     
@@ -150,8 +159,7 @@ compressdata_prob <- function(compress, criteria, dist_vec, subclones_discovered
   }else{
     if(nrow(rel_liks) > 2){
       transition_probs <- rowSums(abs(apply(rel_liks, 2, diff)))
-    }
-    else if(nrow(rel_liks) == 2){
+    }else if(nrow(rel_liks) == 2){
       transition_probs <- sum(abs(apply(rel_liks, 2, diff)))
     }
   }
@@ -642,18 +650,10 @@ subclonal_joint_probs <- function(new_seg_data, tp, ploidy, maxpeak, clonal_posi
     positions_vectors <- c(positions_vectors, list(subcl_pos))
     if(is.na(in_sd)){
       ## Compute variance by segment, grab only largest 50% of segments or top ten, whichever is smaller
-      segged_sd <- new_seg_data %>% 
-        filter(CN - round(CN) == 0) %>%  
-        group_by(chr, segment) %>% 
-        add_tally %>% 
-        dplyr::summarise("var" = sd(corrected_depth), "n" = first(n)) %>% 
-        arrange(desc(n)) %>% 
-        ungroup %>%  
-        slice(1:min(10, nrow(.)/2)) %>% 
-        select(var) %>% 
-        unlist %>% 
-        mean
-      ## Use the previous estimate to get the true variance by comparison to a KDE
+      segged_sd = new_seg_data[CN - round(CN) == 0]
+      segged_sd[,n:=.N, by = list(chr, segment)]
+      segged_sd = mean(segged_sd[,.(var = sd(corrected_depth), n = first(n)), by = list(chr, segment)][order(n, decreasing = T)][1:min(10, .N/2)]$var)
+      ## Use the previous estimate to get the "true" variance by comparison to a KDE
       segged_sd <- match_kde_height(new_seg_data$segment_depth, means = subcl_pos, sd = segged_sd)
     }else{segged_sd <- in_sd}
     ## Store variance
@@ -808,7 +808,23 @@ segment_subclones <- function(new_seg_data, predictedpositions, depth_variance, 
   return(list("data" = list(new_seg_data), "fraction" = subclonal_fraction, "subclonal_variance" = subclonal_variance))
 }
 
-
+nonparam_seg = function(dat, init = NA){
+  dat = c(Inf, dat, Inf)
+  ## Start by picking a point in the range if none is specified
+  if(is.na(init[1])){
+    init = sample(2:(length(dat)-1), 1)
+  }
+  ## Select neighbouring bins
+  neigh = c(min(init) - 1, max(init) + 1)
+  
+  ## Value of data at init
+  val = median(dat[init])
+  
+  ## Find bins that are closer
+  select = neigh[which.min(abs(val - dat[neigh]))]
+  
+  out = c(init, select)
+}
 
 n_seg_fun <- function(){
   t_dat <- new_seg_data %>% filter(chr == "4") %>% data.table()
@@ -817,13 +833,6 @@ n_seg_fun <- function(){
   t_dat$err <- qnorm(0.995)*t_dat$sd_seg/sqrt(t_dat$n_bin)
 }
 
-if(F){
-  all_data <- in_list$all_data
-  segmented_data <- in_list$segmented_data
-  tp = in_models$tp[1]
-  ploidy = in_models$ploidy[1]
-  maxpeak <- in_list$maxpeak
-}
 
 #' @export
 ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf){
@@ -861,7 +870,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   ## Compute likelihoods based on GMM fit
   joint_probs <- list("jp_tbl" = data.table(parametric_gmm_fit(segmented_data$corrected_depth, means = predictedpositions, variances = variance)))
   
-  ## Get the 80th percentile of likelihood shifts as a low bar for similarity
+  ## Get the 80th percentile of likelihood shifts as a very low bar for similarity
   lik_shift <- quantile(rowSums(abs(apply(joint_probs$jp_tbl, 2, diff))), prob = 0.8)
   
   ## Segment genome based on 80th percentile of likelihoods
@@ -1926,4 +1935,3 @@ plot_segments <- function(chr_vec, chr, pos, y, segments){
   p = p %>% ggplot(aes(x= pos, y = y, color = segments)) + geom_point() + geom_vline(xintercept = seg_pos, alpha=0.1) + scale_color_viridis()
   return(p)
 }
-
