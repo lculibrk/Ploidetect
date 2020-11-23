@@ -21,7 +21,7 @@ The outputs from Ploidetect are five files:
   
 models.txt describes a number of inferred models to explain the tumor purity and ploidy of your sample. Most of the columns are gobbeldygook and need to be cleaned up, but the important columns are the tp and ploidy. The rows are ordered in the order the algorithm has scored it, so the first plot/row corresponds to the highest score.
 
-plots.pdf is a multi-page pdf, where each page corresponds to a line in models.txt. This is intended to assist in review of the data. While great pains have been made to ensure that Ploidetect is highly accurate in model selection, it (and no tool, for that matter) is 100% accurate and you might want to take a peek to make sure the model (red peaks) seems to agree with the distribution of observed read depths (black peaks). In tumors with a high degree of heterogeneity, the model might skip some irregular peaks. 
+plots.pdf is a multi-page pdf, where each page corresponds to a line in models.txt. This is intended to assist in review of the data. While great pains have been made to ensure that Ploidetect is highly accurate in model selection, it (and no tool, for that matter) is not 100% accurate and you might want to take a peek to make sure the model (red peaks) seems to agree with the distribution of observed read depths (black peaks). In tumors with a high degree of heterogeneity, the model might skip some irregular peaks. 
 
 cna.txt contains the copy number informtation. There are a number of columns contained therein:
 
