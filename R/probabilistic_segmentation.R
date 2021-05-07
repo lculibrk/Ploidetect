@@ -721,10 +721,7 @@ segment_subclones <- function(new_seg_data, predictedpositions, depth_variance, 
   new_seg_data$CN <- as.numeric(names(subclonal_probs$jp_tbl)[apply(subclonal_probs$jp_tbl, 1, which.max)])
   
   new_seg_data[is.na(CN)]$CN <- round(predict(model, data.frame("segment_depth" = new_seg_data[is.na(CN)]$segment_depth))/(subclonal_fraction*10), 1)*(subclonal_fraction*10)
-  
-  new_seg_data %>% filter(chr == 18, CN < 5) %>%  ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
-  
-  
+
   CNA_list <- new_seg_data[,c("chr", "CN")]
   
   CNA_list <- unique(CNA_list)
@@ -738,7 +735,6 @@ segment_subclones <- function(new_seg_data, predictedpositions, depth_variance, 
   CNA_list <- split(CNA_list$CN, f = CNA_list$chr)
   CNA_list <- lapply(CNA_list, function(x)unique(sort(x)))
   
-  #new_jp_tbl <- maf_gmm_fit_subclonal_prior(depth_data = new_seg_data$segment_depth, vaf_data = new_seg_data$maf, chr_vec = new_seg_data$chr, means = comp_pos, variances = depth_variance, maf_variances = 0.06, maxpeak = maxpeak, ploidy = ploidy, tp = tp, cn_list = CNA_list)
   new_jp_tbl <- list("jp_tbl" = data.table(parametric_gmm_fit(data = new_seg_data$segment_depth, means = comp_pos, variances = depth_variance)))
   
   #### Generate GMM fits for subclonal copy number calls from joint probability matrix
@@ -772,7 +768,6 @@ segment_subclones <- function(new_seg_data, predictedpositions, depth_variance, 
   subcl_vec <- which(putative_subclones$CN != round(putative_subclones$CN))
   ## Filter for "good" subclones - Heuristic
   
-  new_seg_data %>% filter(chr == 3) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment == 2)) + geom_point() + scale_color_viridis(discrete = T)
   putative_subclones[subcl_vec[na_or_true(shift(putative_subclones$CN, type = "lag")[subcl_vec] == shift(putative_subclones$CN, type = "lead")[subcl_vec] & shift(putative_subclones$chr, type = "lag")[subcl_vec] == shift(putative_subclones$chr, type = "lead")[subcl_vec])]]
   
   blacklist_subcl <- putative_subclones[subcl_vec[na_or_true(shift(putative_subclones$CN, type = "lag")[subcl_vec] == shift(putative_subclones$CN, type = "lead")[subcl_vec] & shift(putative_subclones$chr, type = "lag")[subcl_vec] == shift(putative_subclones$chr, type = "lead")[subcl_vec])]]
@@ -800,9 +795,7 @@ segment_subclones <- function(new_seg_data, predictedpositions, depth_variance, 
   new_seg_data$segment <- components(g)$membership
   new_seg_data[,segment_depth:=median(corrected_depth), by = list(chr, segment)]
   new_seg_data[,CN:=as.numeric(names(comp_pos)[apply(parametric_gmm_fit(data = segment_depth, means = comp_pos, variances = depth_variance), 1, which.max)])]
-  ## Debugging plot
-  new_seg_data %>%  filter(chr == "1", CN < 11) %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
-  
+
   
   
   return(list("data" = list(new_seg_data), "fraction" = subclonal_fraction, "subclonal_variance" = subclonal_variance))
@@ -825,15 +818,6 @@ nonparam_seg = function(dat, init = NA){
   
   out = c(init, select)
 }
-
-n_seg_fun <- function(){
-  t_dat <- new_seg_data %>% filter(chr == "4") %>% data.table()
-  t_dat <- t_dat[,.(segment_depth = mean(corrected_depth), sd_seg = sd(corrected_depth), n_bin = length(corrected_depth)), by = list(chr, segment)]
-  t_dat$sd_seg[is.na(t_dat$sd_seg)] <- Inf
-  t_dat$err <- qnorm(0.995)*t_dat$sd_seg/sqrt(t_dat$n_bin)
-}
-
-
 #' @export
 ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf){
   ## Get estimated differential depth
@@ -1053,10 +1037,6 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   #  }
   #}
   
-  reduced_mappings %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis() + xlab("Position") + ylab("Read Depth") + ggtitle("1kb Bins") + theme_cowplot() +  theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
-  #reduced_mappings %>% filter(chr == "4", segment == 158) %>% ggplot(aes(x = gc, y = corrected_depth)) + geom_point(size = 5, alpha = 0.5) + geom_smooth(method = "loess", span = 800)
-  reduced_mappings %>% filter(chr == "1") %>%  ggplot(aes(x = pos, y = corrected_depth)) + geom_point() + theme_cowplot() + xlab("Position") + ylab("Read Depth") + ggtitle("1kb Bins") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
-  
   #plot_density_gmm(data = reduced_mappings$segment_depth, means = base_characteristics$cn_by_depth, weights = rep(1, times = 11), sd = variance/unaltered)
   
   iterations <- round(unaltered/2^(1:ceiling(log2(unaltered))))
@@ -1078,7 +1058,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   subcl_pos <- depth(maxpeak = maxpeak, d = get_coverage_characteristics(tp = tp, ploidy = ploidy, maxpeak = maxpeak)$diff, P = ploidy, n = obs_pos)
   
-  maxpeak_base <- maxpeak/(unaltered - 1)
+  maxpeak_base <- maxpeak/max(1, (unaltered - 1))
   
   base_characteristics <- get_coverage_characteristics(tp, ploidy, maxpeak_base)
   
@@ -1588,6 +1568,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       previous_segment_mappings <- previous_segment_mappings[,.(pos = first(pos), CN = median(CN)), by = list(chr, segment)]
     }
     plot_segments(busted_segment_mappings$chr, 10, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
+    print(condition)
   }
   
   plot_segments(out_seg_mappings$chr, 10, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
@@ -1616,33 +1597,47 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity")]
   setnames(out_seg_mappings, "call", "CN")
   
-  CN_palette <- c("0" = "#cc0000", 
+  CN_palette <- c("0" = "#000000", 
                   "1" = "#000066", 
                   "2" = "#26d953", 
                   "3" = "#609f70", 
                   "4" = "#cccc00", 
-                  "5" = "#80804d",
+                  "5" = "#ADAD47",
                   "6" = "#cc6600", 
                   "7" = "#856647", 
                   "8" = "#cc0000"
   )
+  plot_labs = c("0" = "HOMD", 
+                "1" = "CN = 1", 
+                "2" = "CN = 2 HET", 
+                "3" = "CN = 2 HOM", 
+                "4" = "CN = 3 HET", 
+                "5" = "CN = 3 HOM", 
+                "6" = "CN = 4 HET", 
+                "7" = "CN = 4 HOM", 
+                "8" = "CN = 5+")
+  plot_shapes <- c("0" = 4, 
+                  "1" = 19, 
+                  "2" = 19, 
+                  "3" = 19, 
+                  "4" = 19, 
+                  "5" = 19,
+                  "6" = 19, 
+                  "7" = 19, 
+                  "8" = 19)
+  
   CN_calls <- split(out_seg_mappings, f = out_seg_mappings$chr)
   
   CNA_plot <- lapply(CN_calls, function(x){
     chr = x$chr[1]
     x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)[1]] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]) %>% ggplot(aes(x = pos, y = log(corrected_depth, base = 2), color = as.character(state))) + 
-      geom_point(size = 0.5) + 
+      geom_point_rast(size = 0.5, aes(shape = factor(state))) +
+      scale_shape_manual(values = plot_shapes, 
+                         labels = plot_labs,
+                         name = "State") +
       scale_color_manual(name = "State",
                          values = CN_palette, 
-                         labels = c("0" = "HOMD", 
-                                    "1" = "CN = 1", 
-                                    "2" = "CN = 2 HET", 
-                                    "3" = "CN = 2 HOM", 
-                                    "4" = "CN = 3 HET", 
-                                    "5" = "CN = 3 HOM", 
-                                    "6" = "CN = 4 HET", 
-                                    "7" = "CN = 4 HOM", 
-                                    "8" = "CN = 5+")) + 
+                         labels = plot_labs) + 
       ylab("log(Read Depth)") + 
       xlab("position") + 
       ggtitle(paste0("Chromosome ", chr, " copy number profile")) + 
@@ -1651,18 +1646,13 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   vaf_plot <- lapply(CN_calls, function(x){
     chr = x$chr[1]
     x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)][1] | pos > centromeres$end[which(centromeres$chr %in% chr)][2]) %>% filter(!is.na(maf)) %>% ggplot(aes(x = pos, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state))) + 
-      geom_point(size = 0.5) + 
+      geom_point_rast(size = 0.5, aes(shape = factor(state))) + 
+      scale_shape_manual(values = plot_shapes, 
+                         labels = plot_labs,
+                         name = "State") +
       scale_color_manual(name = "State",
                          values = CN_palette, 
-                         labels = c("0" = "HOMD", 
-                                    "1" = "CN = 1", 
-                                    "2" = "CN = 2 HET", 
-                                    "3" = "CN = 2 HOM", 
-                                    "4" = "CN = 3 HET", 
-                                    "5" = "CN = 3 HOM", 
-                                    "6" = "CN = 4 HET", 
-                                    "7" = "CN = 4 HOM", 
-                                    "8" = "CN = 5+")) + 
+                         labels = plot_labs) + 
       ylab("Major allele frequency") + 
       xlab("position") + 
       ggtitle(paste0("Chromosome ", chr, " allele frequency profile")) + 
@@ -1670,11 +1660,15 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       theme_bw()
   })
   
+  
+  
   cna_plots <- list()
   
   for(i in 1:length(CNA_plot)){
     cna_plots[i] <- list(plot_grid(CNA_plot[[i]], vaf_plot[[i]], align = "v", axis = "l", ncol = 1))
   }
+
+  cna_plots = cna_plots[order(order(reorder_mapping))]
   
   CN_calls <- do.call(rbind.data.frame, CN_calls)
   
