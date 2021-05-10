@@ -169,7 +169,7 @@ ploidetect_preprocess <- function(all_data, debugPlots = F, verbose = F, simplif
   plot_limits_depth <- quantile(x$y_raw, probs = c(0.99))
   plot_limits_depth <- c(0, plot_limits_depth)
   if(debugPlots | !exists("debugPlots")){
-    rawPlot <- x %>% ggplot(aes(x = window_size, y = y_raw)) + geom_point(size = 0.1, alpha = 0.1) + theme_bw() + xlab("Window size") + ylab("Tumour Read counts") + ggtitle("Raw counts by window size")+ 
+    rawPlot <- x %>% ggplot(aes(x = window_size, y = y_raw)) + geom_point(size = 0.1, alpha = 0.1) + theme_bw() + xlab("Bin Size") + ylab("Tumour Read counts") + ggtitle("Raw counts by bin size")+ 
       theme(
         plot.title = element_text(size = 20),
         plot.caption = element_text(size = 15),
@@ -178,7 +178,7 @@ ploidetect_preprocess <- function(all_data, debugPlots = F, verbose = F, simplif
       ) + scale_x_continuous(limits = plot_limits_size) + scale_y_continuous(limits = plot_limits_depth)
     print(rawPlot)
     
-    #x %>% filter(chr == 5) %>% ggplot(aes(x = pos, y = y_raw)) + geom_point(size = 0.5) + theme_bw() + ylab("Raw depth") + xlab("Position") + ggtitle("Uncorrected Read Depth")
+    #x %>% filter(chr == 10) %>% ggplot(aes(x = pos, y = y_raw)) + geom_point(size = 0.5) + theme_bw() + ylab("Raw depth") + xlab("Position") + ggtitle("Uncorrected Read Depth")
     
     
   }

@@ -12,7 +12,8 @@ Depends:
     ggplot2 (>= 3.2.1),
     cowplot (>= 0.9.0),
     viridis (>= 0.5.1),
-    viridisLite(>= 0.3.0)
+    viridisLite(>= 0.3.0),
+    ggrastr
 Imports:
     igraph(>= 1.2.4),
     data.table(>= 1.12.2),
@@ -20,8 +21,9 @@ Imports:
     ggplot2 (>= 3.2.1),
     cowplot (>= 0.9.0),
     viridis (>= 0.5.1),
-    viridisLite(>= 0.3.0)
+    viridisLite(>= 0.3.0),
+    ggrastr
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.0.1
+RoxygenNote: 7.1.1
