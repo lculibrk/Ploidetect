@@ -4,17 +4,8 @@
 \alias{maf_gmm_fit}
 \title{Fits a gaussian mixture-of-alleles model}
 \usage{
-maf_gmm_fit(
-  depth_data,
-  vaf_data,
-  chr_vec,
-  means,
-  variances,
-  maf_variances,
-  maxpeak,
-  lowest = NA,
-  ploidy = NA
-)
+maf_gmm_fit(depth_data, vaf_data, chr_vec, means, variances, maf_variances,
+  maxpeak, lowest = NA, ploidy = NA)
 }
 \arguments{
 \item{depth_data}{input read depth data for all bins}

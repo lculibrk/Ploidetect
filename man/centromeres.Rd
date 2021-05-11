@@ -4,9 +4,7 @@
 \name{centromeres}
 \alias{centromeres}
 \title{Centromeres for hg19.}
-\format{
-An object of class \code{data.frame} with 48 rows and 5 columns.
-}
+\format{An object of class \code{data.frame} with 48 rows and 5 columns.}
 \usage{
 centromeres
 }
