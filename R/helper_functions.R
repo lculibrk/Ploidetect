@@ -64,6 +64,7 @@ view_segments = function(cna, chrom, plot_pos, plot_end){
 	plot_ploidetect(cna[chr == chrom][pos >= plot_pos & end <= plot_end])
 }
 
+#' @export
 map_noisy_segments = function(cna, chrom, start_pos, end_pos, exclude){
 	region = cna[chr == chrom][pos >= start_pos & end <= end_pos]
 	top_cn = region[,.(s = sum(end - pos)), by = CN][order(s, decreasing = T)]$CN[1]
@@ -73,7 +74,7 @@ map_noisy_segments = function(cna, chrom, start_pos, end_pos, exclude){
 	names(regions) = top_segment
 	}
 
-#' @export`
+#' @export
 most_common = function(v){
 	res = names(sort(table(v),decreasing=TRUE))[1]
 	return(res)
@@ -102,10 +103,12 @@ curate_segments = function(cna, cna_condensed, regions){
 	return(cna)
 }
 
+#' @export
 collapse_segments = function(cna){
 	cna[,.(pos = first(pos), end = last(end), CN = first(CN), state = first(state), zygosity = first(zygosity), segment_depth = first(segment_depth)), by = list(chr, segment)]
 }
 
+#' @export
 plot_all_segments = function(cna){
 	data(centromeres)
 	CN_palette <- c("0" = "#000000", 
