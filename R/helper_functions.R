@@ -1,3 +1,10 @@
+#' Load data from Ploidetect's output
+#' 
+#' \code{load_ploidetect_data} takes the path to the ploidetect output and returns a named \code{list} containing \code{cna},
+#' a data.table of the bin-level copy number data, \code{segments}, a data.table of the 
+#' segment-level copy number data, and \code{raw}, a data.table of the raw data.
+#' @param path the path to the ploidetect outputs
+#' @return a named list oif data.tables
 #' @export
 load_ploidetect_data = function(path){
 	if(!grepl("/$", path)){
@@ -6,8 +13,20 @@ load_ploidetect_data = function(path){
 	cna_raw = fread(paste0(path, "cna.txt"))
 	cna_condensed = fread(paste0(path, "cna_condensed.txt"))
 	original_data = readRDS(paste0(path, "segmented.RDS"))$all_data
-}
+	out = list("cna" = cna_raw, "segments" = cna_condensed, "raw" = original_data)
+	return(out)
+	}
 
+
+
+#' Produce ploidetect-style plots for a copy number profile
+#' 
+#' \code{plot_ploidetect} takes a data.table containing the bin-level copy number data for a
+#' locus of interest and an optional argument of whether to indicate segment breakpoints. It returns a 
+#' \code{ggplot2} plot of the data
+#' @param cna a data.table containing the regions of interest. Single chromosome only
+#' @param seg_lines a boolean of whether to include vertical dashed lines at each segment breakpoint
+#' @return a ggplot2 plot
 #' @export
 plot_ploidetect = function(cna, seg_lines = F){
 	CN_palette <- c("0" = "#000000", 
@@ -59,13 +78,32 @@ plot_ploidetect = function(cna, seg_lines = F){
 	return(CNA_plot)
 }
 
+#' Produce ploidetect-style plots for a copy number profile at the given chromosome and positions
+#' 
+#' \code{view_segments} is a wrapper for plot_ploidetect to make filtering for specific regions simple
+#' @param cna a data.table containing the bin-level copy number calls
+#' @param chrom the chromosome of interest
+#' @param plot_pos the start position of the plot
+#' @param plot_end the end position of the plot
+#' @return a ggplot2 plot
 #' @export
 view_segments = function(cna, chrom, plot_pos, plot_end){
 	plot_ploidetect(cna[chr == chrom][pos >= plot_pos & end <= plot_end])
 }
 
+#' Map all segments within an interval to the dominant CN state 
+#' 
+#' \code{map_noisy_segments} takes in a genomic region on chromosome \code{chr} between \code{start_pos}
+#' and \code{end_pos} and produces a named list of vectors to be passed to \code{curate_segments} 
+#' indicating a mapping between each segment and the most common segment in the region
+#' 
+#' @param cna a data.table containing the bin-level copy number calls
+#' @param chrom the chromosome of interest
+#' @param start_pos the start position of the mapping
+#' @param end_pos the end position of the mapping - the segments of interest must have end <= this number
+#' @return a named list
 #' @export
-map_noisy_segments = function(cna, chrom, start_pos, end_pos, exclude){
+map_noisy_segments = function(cna, chrom, start_pos, end_pos){
 	region = cna[chr == chrom][pos >= start_pos & end <= end_pos]
 	top_cn = region[,.(s = sum(end - pos)), by = CN][order(s, decreasing = T)]$CN[1]
 	top_segment = region[CN == top_cn][,.(s = sum(end - pos)), by = segment][order(s, decreasing = T)]$segment[1]
@@ -82,8 +120,17 @@ most_common = function(v){
 }
 
 
+#' Merge noisy segments with their locally dominant segment 
+#' 
+#' \code{curate_segments} takes in \code{cna} of the bin-level copy number calls and
+#' \code{regions} from \code{map_noisy_segments}. Multiple outputs from \code{map_noisy_segments}
+#' can be combined with \code{c()}
+#' 
+#' @param cna a data.table containing the bin-level copy number calls
+#' @param regions the output from map_noisy_segments
+#' @return a \code{cna} data.table with the modified segments.
 #' @export
-curate_segments = function(cna, cna_condensed, regions){
+curate_segments = function(cna, regions){
 	regions_list =  unlist(regions)
 	if(any(duplicated(regions_list))){
 		repeated = regions_list[duplicated(regions_list)]
@@ -98,6 +145,7 @@ curate_segments = function(cna, cna_condensed, regions){
 		extract[,segment_depth := median(corrected_depth), by = segment]
 		extract[,CN := as.numeric(most_common(CN)), by = segment]
 		extract[,state := as.numeric(most_common(state)), by = segment]
+		extract[,zygosity:=most_common(zygosity), by = segment]
 		cna = rbind(others, extract)[order(chr, pos)]
 	}
 	return(cna)
