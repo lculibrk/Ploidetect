@@ -1,6 +1,6 @@
 Package: Ploidetect
 Title: Ploidetect - Detection of tumour purity, aneuploidy, and copy number variation from whole genome sequnce data
-Version: 0.0.1
+Version: 1.1.0
 Authors@R: person("Luka", "Culibrk", email = "lculibrk@bcgsc.ca", role = c("aut", "cre"))
 Description: Ploidetect estimates tumour purity and ploidy by fitting a number of gaussian mixture models (GMMs) to read depth and SNP data. Based on likelihood estimates, other criteria
     inferred from GMM fits and copy numnber segmentation metrics, Ploidetect scores each model. Ploidetect optionally performs copy number segmentation and copy number variation detection.
