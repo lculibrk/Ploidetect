@@ -1,3 +1,5 @@
+
+
 #' Load data from Ploidetect's output
 #' 
 #' \code{load_ploidetect_data} takes the path to the ploidetect output and returns a named \code{list} containing \code{cna},
@@ -110,6 +112,7 @@ map_noisy_segments = function(cna, chrom, start_pos, end_pos){
 	mapping = unique(region$segment)
 	regions = list(mapping)
 	names(regions) = top_segment
+	return(regions)
 	}
 
 #' @export
