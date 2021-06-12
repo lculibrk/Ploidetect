@@ -241,4 +241,21 @@ plot_all_segments = function(cna){
 	return(cna_plots)
 	
 }
-
+#' @export
+adjust_model_ploidy = function(models, model_ind = 1, new_ploidy){
+	model = models[model_ind,]
+	tp = model$tp
+	rtp = 1 - model$tp
+	diff = model$modeling_tp
+	position_2 = 2*diff/(1-rtp)
+	old_ploidy = model$ploidy
+	## Calculate maxpeak position
+	mp = position_2 + diff * (old_ploidy - new_ploidy)
+	new_hd = mp - new_ploidy*diff
+	new_pos2 = mp - diff * (new_ploidy - 2)
+	new_tp = 1 - new_hd/new_pos2
+	model2 = model
+	model2$tp = new_tp
+	model2$ploidy = new_ploidy
+	return(model2)
+}
