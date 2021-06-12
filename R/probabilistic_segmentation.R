@@ -1667,7 +1667,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   for(i in 1:length(CNA_plot)){
     cna_plots[i] <- list(plot_grid(CNA_plot[[i]], vaf_plot[[i]], align = "v", axis = "l", ncol = 1))
   }
-
+  
   
   chrs = as.numeric(names(CN_calls))
   sortedchrs = sort(chrs)
