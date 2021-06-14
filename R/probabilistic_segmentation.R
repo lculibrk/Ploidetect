@@ -1594,27 +1594,17 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   
   CN_palette <- c("0" = "#000000", # Black
-                  "1" = "#6f428c", # Purple
-                  "2" = "#80c5e0", # Light Blue
-                  "3" = "#2e99c3", # Blue
-                  "4" = "#dba68a", # Light Orange
-                  "5" = "#b36338", # Orange
-                  "6" = "#b2cf99", # Light Green
-                  "7" = "#6a9347", # Green
-                  "8" = "#cd6eab"  # pink
+                  "1" = "#694588", # Purple
+                  "2" = "#6fc0db", # Light Blue
+                  "3" = "#2aa4ca", # Blue
+                  "4" = "#89b99a", # Light Green
+                  "5" = "#529977", # Green
+                  "6" = "#f6b75e", # Light Orange
+                  "7" = "#f39420", # Orange
+                  "8" = "#ec0077"  # pink
   )
   
   
-  CN_palette <- c("0" = "#000000", 
-                  "1" = "#CC6EAB", 
-                  "2" = "#26d953", 
-                  "3" = "#609f70", 
-                  "4" = "#cccc00", 
-                  "5" = "#ADAD47",
-                  "6" = "#cc6600", 
-                  "7" = "#856647", 
-                  "8" = "#cc0000"
-  )
   
   plot_labs = c("0" = "HOMD", 
                 "1" = "CN = 1", 
@@ -1737,10 +1727,32 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
             plot.margin = unit(c(5.5,29,5.5,5.5), "pt"))
   })
   
+  ### Ideograms
+  
+  cytoband_dat = fread("http://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/cytoBand.txt.gz")
+  ideo_colors = c("gneg" = "white", "gpos25" = "black", "gpos50" = "black", "gpos75" = "black", "gpos100" = "black", "acen" = "red", "gvar" = "black", "stalk" = "black")
+  ideo_alphas = c("gneg" = 0, "gpos25" = .25, "gpos50" = .5, "gpos75" = .75, "gpos100" = 1, "acen" = 1, "gvar" = 1, "stalk" = 0.5)
+  ideo_plots = lapply(CN_calls, function(x){
+    chr = x$chr[1]
+    xlim = max(x$end)
+    ylim = 1
+    ideo_1 = cytoband_dat[V1 == paste0("chr", chr)]
+    
+    t1 = ggplot(ideo_1, aes(xmin = V2, xmax = V3, ymin = 0, ymax = ylim, fill = V5, alpha = V5)) + 
+      geom_rect(color = "black") + 
+      scale_fill_manual(values = ideo_colors) +
+      scale_alpha_manual(values = ideo_alphas) +
+      scale_x_continuous(limits = c(0, xlim), position = "top", breaks = seq(from = 0, to = 2.5e+08, by = 2.5e+07), labels = c(0, paste0(seq(25, 250, by = 25), "Mb"))) +
+      scale_y_continuous(limits = c(0, 1)) +
+      theme_void() + 
+      theme(legend.position = "none", plot.title = element_text(size = 10), plot.margin = unit(c(5.5,29,5.5,5.5), "pt"))
+    return(t1)
+  })
+
   cna_plots <- list()
   
   for(i in 1:length(CNA_plot)){
-    cna_plots[i] <- list(plot_grid(plot_grid(CNA_plot[[i]], vaf_plot[[i]], align = "v", axis = "l", ncol = 1, rel_widths = c(1, 0.5)), legends[[i]], rel_widths = c(1, 0.2)))
+    cna_plots[i] <- list(plot_grid(plot_grid(CNA_plot[[i]], vaf_plot[[i]], ideo_plots[[i]], align = "v", axis = "l", ncol = 1, rel_heights = c(1, 1, 0.1)), legends[[i]], rel_widths = c(1, 0.2)))
   }
   
   chrs = as.numeric(names(CN_calls))
