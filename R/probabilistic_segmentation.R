@@ -982,7 +982,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   common_maf_means <- testMAF(as.numeric(common_call), tp)
   maf_variance <- match_kde_height(as.numeric(unlist(unmerge_mafs(subcl_seg$maf[subcl_seg$CN == common_call]))), means = common_maf_means, sd = 0.03)
   
-  subcl_seg %>% filter(chr == "X") %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
+  #subcl_seg %>% filter(chr == "X") %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
   
   #plot_density_gmm(subcl_seg$corrected_depth, subcl_pos, weights = 1, sd = variance)
   
