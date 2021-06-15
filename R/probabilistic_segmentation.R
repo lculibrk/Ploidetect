@@ -834,7 +834,14 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     missing = (0:10)[!as.character(0:10) %in% names(predictedpositions)]
     predictedpositions = sort(c(predictedpositions, depth(maxpeak, d_diff, ploidy, n = missing)))
   }
+  ## Correct for X chromosome being single-copy in males that was otherwise normalized out during preprocessing
+  sizes = all_data$end - all_data$pos
+  xrat = median(sizes[all_data$chr == "X"])/median(sizes[all_data$chr != "X"])
+  all_data$tumour[all_data$chr == "X"] = all_data$tumour[all_data$chr == "X"]/xrat
   
+  s_sizes = segmented_data$end - segmented_data$pos
+  xrat = median(s_sizes[segmented_data$chr == "X"])/median(s_sizes[segmented_data$chr != "X"])
+  segmented_data[chr == "X"]$corrected_depth = segmented_data[chr == "X"]$corrected_depth/xrat
   
   ## Estimate variance based on KDE matching
   variance <- density(segmented_data$corrected_depth)$bw
@@ -975,7 +982,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   common_maf_means <- testMAF(as.numeric(common_call), tp)
   maf_variance <- match_kde_height(as.numeric(unlist(unmerge_mafs(subcl_seg$maf[subcl_seg$CN == common_call]))), means = common_maf_means, sd = 0.03)
   
-  subcl_seg %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
+  subcl_seg %>% filter(chr == "X") %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
   
   #plot_density_gmm(subcl_seg$corrected_depth, subcl_pos, weights = 1, sd = variance)
   
