@@ -1593,17 +1593,30 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   setnames(out_seg_mappings, "call", "CN")
   
   
-  CN_palette <- c("0" = "#000000", # Black
-                  "1" = "#694588", # Purple
-                  "2" = "#6fc0db", # Light Blue
-                  "3" = "#2aa4ca", # Blue
-                  "4" = "#89b99a", # Light Green
-                  "5" = "#529977", # Green
-                  "6" = "#f6b75e", # Light Orange
-                  "7" = "#f39420", # Orange
-                  "8" = "#ec0077"  # pink
+  CN_palette <- c("#000000FF", # Black
+                  "#2aa4caFF", # Blue
+                  "#776388FF", # Light purple
+                  "#694588FF", # Purple
+                  "#f6b75eFF", # Light Orange
+                  "#f39420FF", # Orange
+                  "#89b99aFF", # Light Green
+                  "#529977FF", # Green
+                  "#ec0077FF", # pink
+
+
+
+
+
+
+
+                  "#FFFFFFFF"
   )
+#
+#                    "#ec8ebdFF", # Light pink
+  #                  "#6fc0dbFF", # Light Blue
+  names(CN_palette) = c(0:8, 10)
   
+
   
   
   plot_labs = c("0" = "HOMD", 
@@ -1680,11 +1693,11 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       cn = k
       k = plt_positions[k]
       poss_states = unique(states[state_cn == cn]$state)
-      if(length(poss_states) == 1){
-        return(poss_states)
-      }
       if(!any(poss_states %in% x$state)){
         return(NA)
+      }
+      if(length(poss_states) == 1){
+        return(poss_states)
       }
       poss_states = x[state %in% poss_states][,.(.N), by = state][order(N, decreasing = T)]$state[1]
       return(poss_states)
@@ -1692,8 +1705,12 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     map_pos = unlist(map_pos)
     lines = data.table(state = as.character(map_pos), y = plt_positions)
     lines = lines[!is.na(state)]
+    ideal_ord = x[,.N, by = state]
+    x$state = factor(x$state, levels = ideal_ord$state)
+    x = x[order(state)]
+    x$state = as.numeric(as.character(x$state))
     x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)[1]] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]) %>% ggplot(aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = as.character(state))) + 
-      geom_point_rast(size = 0.5, aes(shape = factor(state))) +
+      geom_point_rast(size = 1, aes(shape = factor(state)), alpha = 1) +
       scale_y_continuous(sec.axis = sec_axis(trans=~.*1, breaks = lines$y, labels = states[1:9,][state %in% lines$state]$state_cn, name = "Copy Number")) + 
       geom_hline(data = lines, mapping = aes(yintercept = y, color = state), size = 0.8, linetype = 1, alpha = 0.5) +
       scale_shape_manual(values = plot_shapes, 
@@ -1728,8 +1745,8 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   })
   
   ### Ideograms
-  
-  cytoband_dat = fread("http://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/cytoBand.txt.gz")
+  ## TODO: take in genome ver and use specific one
+  cytoband_dat = fread(Sys.glob("resources/*/cytobands.txt")[1])
   ideo_colors = c("gneg" = "white", "gpos25" = "black", "gpos50" = "black", "gpos75" = "black", "gpos100" = "black", "acen" = "red", "gvar" = "black", "stalk" = "black")
   ideo_alphas = c("gneg" = 0, "gpos25" = .25, "gpos50" = .5, "gpos75" = .75, "gpos100" = 1, "acen" = 1, "gvar" = 1, "stalk" = 0.5)
   ideo_plots = lapply(CN_calls, function(x){
@@ -1745,7 +1762,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       scale_x_continuous(limits = c(0, xlim), position = "top", breaks = seq(from = 0, to = 2.5e+08, by = 2.5e+07), labels = c(0, paste0(seq(25, 250, by = 25), "Mb"))) +
       scale_y_continuous(limits = c(0, 1)) +
       theme_void() + 
-      theme(legend.position = "none", plot.title = element_text(size = 10), plot.margin = unit(c(5.5,29,5.5,5.5), "pt"))
+      theme(legend.position = "none", plot.title = element_text(size = 10), plot.margin = unit(c(5.5,20,5.5,5.5), "pt"))
     return(t1)
   })
 
