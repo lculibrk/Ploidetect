@@ -436,6 +436,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   ## Correct for X chromosome being single-copy in males that was otherwise normalized out during preprocessing
   ## Check if the case is a male
   sizes = all_data$end - all_data$pos
+<<<<<<< HEAD
   autosomes = sizes[!all_data$chr %in% c("X", "Y")]
   sex_chrs = sizes[all_data$chr %in% c("X", "Y")]
   expected_x = median(autosomes)/2
@@ -445,6 +446,13 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     all_data$tumour[all_data$chr == "X"] = all_data$tumour[all_data$chr == "X"]/2
     segmented_data[chr == "X"]$corrected_depth = segmented_data[chr == "X"]$corrected_depth/2
   }
+=======
+  xrat = median(sizes[all_data$chr == "X"])/median(sizes[all_data$chr != "X"])
+  all_data$tumour[all_data$chr == "X"] = all_data$tumour[all_data$chr == "X"]/xrat
+  s_sizes = segmented_data$end - segmented_data$pos
+  xrat = median(s_sizes[segmented_data$chr == "X"])/median(s_sizes[segmented_data$chr != "X"])
+  segmented_data[chr == "X"]$corrected_depth = segmented_data[chr == "X"]$corrected_depth/xrat
+>>>>>>> Cleanup \#1 of codebase
   
   ## Estimate variance based on KDE matching
   variance <- density(segmented_data$corrected_depth)$bw
@@ -622,11 +630,15 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   current_median_length <- median(seg_lens)
   subclonal_seg_mappings <- setnames(rbindlist(seg_mappings), old = "call", new = "CN")
   ## Begin coarse-to-fine segmentation
+<<<<<<< HEAD
 
   ## Set first iteration
   i = 1
 
   ## Exit condition
+=======
+  i = 1
+>>>>>>> Cleanup \#1 of codebase
   condition = T
   while(condition){
     ## Record the "mergings" done to the input data in this iteration
