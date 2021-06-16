@@ -1549,6 +1549,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     
     if(i > length(iterations)){
+      cn_positions = iteration_positions
       out_seg_mappings <- data.table::copy(busted_segment_mappings)
       condition = F
     }
