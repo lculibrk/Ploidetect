@@ -619,66 +619,45 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   i = 1
   condition = T
   while(condition){
-    
+    ## val is number of bins merged into the meta-bin
     val <- iterations[i]
-    
+    ## Break if we're beyond the max_iters setting
     if(i > max_iters){
       condition = F
       break
     }
-    
+    ## Break if we're beyond the minimum meta-bin size
     if(val < min_size){
       condition = F
       break
     }
-    
+    ## Set the "previous merging value" for use after coarse-to-fine seg
     if(i == 1){
       prev_val = unaltered
     }else{prev_val = iterations[i - 1]}
-    
-    
-    
+    ## Merge bins based on val
     reduced_mappings$merge_vec <- floor(seq(from = 0, by = 1/val, length.out = nrow(reduced_mappings)))
-    
     iteration_mappings <- reduced_mappings[,.(pos = first(pos), end = last(end), corrected_depth = sum(corrected_depth), n = length(pos), maf = merge_mafs(maf, exp = T), gc = mean(gc)), by = list(merge_vec, chr)]
-    
+    ## Map segments to current iteration data
     current_segment_mappings <- previous_segment_mappings[,-"end"][iteration_mappings, on = c("chr", "pos"), roll = Inf]
-    
     current_segment_mappings[,segment_depth:=median(corrected_depth), by = list(chr, segment)]
-    
-    
-    #current_segment_mappings %>% filter(chr == "3") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis()
-    
+    ## Get the maxpeak for current iteration
     iteration_maxpeak <- median(maxpeak_segments[current_segment_mappings, on = c("chr", "segment")][(mp),]$corrected_depth)
-    
+    ## Adjust read depth for the current meta-bin size
     current_segment_mappings[, corrected_depth := corrected_depth/(n) * val]
     current_segment_mappings[, n := NULL]
     current_segment_mappings[, segment_depth := median(corrected_depth), by = list(chr, segment)]
-    
-    #current_segment_mappings[,corrected_depth:= lowesswrapper(x = gc, y = corrected_depth, bw = 1)$residual + median(corrected_depth), by = list(CN)]
-    
-    #current_segment_mappings %>% filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis() + theme_cowplot() + xlab("Position") + ylab("Read Depth") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20)) + ggtitle("50kb Mapped Segments")
-    #current_segment_mappings %>% filter(chr == "17") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis()
-    
-    #current_segment_mappings %>% group_by(chr, segment) %>% dplyr::summarise(v = sd(corrected_depth)) %>% ungroup %>% select(v) %>% unlist %>% mean(na.rm = T)
-    #current_segment_mappings %>% group_by(chr, segment) %>% dplyr::summarise(v = sd(t_cor_dp)) %>% ungroup %>% select(v) %>% unlist %>% mean(na.rm = T)
-    
-    
-    #current_segment_mappings %>% filter(chr == "3") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis()
-    
-    
+    ## Adjust positions by the change in bin size
     iteration_positions <- subcl_pos/(unaltered/val)
-    
+    ## Adjust positions by the shift in maxpeak
     iteration_positions <- iteration_positions - (iteration_positions[names(iteration_positions) == ploidy] - iteration_maxpeak)
-    
+    ## Make an LM for regressing subclonal cnvs with the current set of depths
     df_depths = data.frame(cn = as.numeric(names(iteration_positions)), segment_depth = iteration_positions)
     lm_depths = lm(cn ~ segment_depth, data = df_depths)
-    
-    split_segs <- split(current_segment_mappings, f = current_segment_mappings$chr)
+    ## Get float CN values for per-chromosome adjustment of GMM means
     regress_cns <- round(predict(lm_depths, current_segment_mappings))
-    
-    split_cns <- split(regress_cns, f = current_segment_mappings$chr)
-    
+    ## Get per-chromosome CN values for per-chromosome adjustment of GMM means
+    split_segs <- split(current_segment_mappings, f = current_segment_mappings$chr)
     individual_pos <- lapply(split_segs, function(x){
       vec <- as.numeric(names(table_vec(x$CN)))
       max_val <- max(ceiling(vec))
@@ -688,96 +667,57 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       ind_pos[ind_pos < 0] <- 0
       return(unique(ind_pos))
     })
-    
+    ## Get positions for this iteration
     iteration_positions <- depth(maxpeak = iteration_maxpeak, d = get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff, P = ploidy, n = sort(unique(unlist(individual_pos))))
-    
-    
+    ## Get a variance estimate of segments for this iteration
     iteration_var_nonmod <- weighted_median(current_segment_mappings[,.(sd_dp = sd(corrected_depth)), by = list(chr, segment)]$sd_dp, w = current_segment_mappings[,.(wt = length(corrected_depth)), by = list(chr, segment)]$wt)
-    #iteration_var <- match_kde_height(current_segment_mappings$corrected_depth, iteration_positions, iteration_var)
-    
-    
-    
+    ## Get responsibilities based on current means/variance estimates
     wt = compute_responsibilities(current_segment_mappings$corrected_depth, iteration_positions, iteration_var_nonmod)
-    
-    #plot_density_gmm(data = current_segment_mappings$segment_depth, means = iteration_positions, weights = colSums(wt), sd = iteration_var)
-    
-    
+    ## Separate clonal and subclonal positions
     iteration_clonal_positions <- iteration_positions[which(as.numeric(names(iteration_positions)) == round(as.numeric(names(iteration_positions))))]
     iteration_subclonal_positions <- iteration_positions[which(as.numeric(names(iteration_positions)) != round(as.numeric(names(iteration_positions))))]
-    
-    
+    ## Pick a variance estimate needed to separate the different clonal CNVs
     iteration_var = get_good_var(iteration_clonal_positions[1], iteration_clonal_positions[2], base = 5)
-    
-    #current_segment_mappings %>% filter(chr == "3", corrected_depth, corrected_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)
-    
-    
+    ## get BAF variance per copy number
     mafstat <- current_segment_mappings[,.(vaf_sd = sd(unlist(unmerge_mafs(maf, flip = T))), n = length(na.omit(unmerge_mafs(maf)))), by = list(chr, segment)]
-    
-    
-    
     maf_variance <- weighted.mean(mafstat$vaf_sd, mafstat$n, na.rm = T)
-    
-    
+    ## Map CNs to segmented means based on new postion values
     current_segment_mappings$CN <- as.numeric(names(iteration_positions))[apply(parametric_gmm_fit(data = current_segment_mappings$segment_depth, means = iteration_positions, variances = iteration_var_nonmod), 1, which.max)]
-    
-    
+    ## Get segment mappings
     collapsed_segs <- current_segment_mappings[,.(pos = first(pos), end = last(end), CN = first(CN), segment_depth = first(segment_depth), n = .N), by = list(chr, segment)]
-    
+    ## Another LM for CN from depth
     df_depths = data.frame(cn = as.numeric(names(iteration_positions)), segment_depth = iteration_positions)
     lm_depths = lm(cn ~ segment_depth, data = df_depths)
-    
+    ## Use current CN calls to get better fractional estimates per-chr
     collapsed_segs$fine_call = predict(lm_depths, collapsed_segs)
     current_segment_mappings$fine_call <- predict(lm_depths, current_segment_mappings)
-    
     if(nrow(collapsed_segs) < nrow(subclonal_seg_mappings)){
       subclonal_seg_mappings <- collapsed_segs
     }
-    
     collapsed_segs <- current_segment_mappings[,.(pos = first(pos), end = last(end), CN = first(CN), segment_depth = first(segment_depth), n = .N, scn = first(fine_call)), by = list(chr, segment)]
-    
-    #roll_table[current_segment_mappings, on = c("chr", "pos"), roll = Inf][,.(pos = first(pos), end = last(end), CN = first(CN), segment_depth = first(segment_depth), n = .N, fine_call = first(fine_call)), by = list(chr, segment)]
-    
     pos_list <- lapply(1:nrow(collapsed_segs), function(x){
       cns = individual_pos[[collapsed_segs[x]$chr]]
       cns[cns == collapsed_segs[x]$CN] <- collapsed_segs[x]$scn
       cns
     })
-    
-    
     collapsed_segs <- collapsed_segs[,.(pos=first(pos), end = last(end), segment_depth = weighted.mean(segment_depth, w = n), n = sum(n)), by = list(chr, segment, CN)]
     collapsed_segs$segment <- 1:nrow(collapsed_segs)
-    
     collapsed_segs$scn = predict(lm_depths, collapsed_segs)
-    
     individual_pos <- lapply(unique(collapsed_segs$chr), function(x){
       chr_data = unique(round(collapsed_segs[chr == x]$scn))
       individual_pos[[x]] <- unique(sort(c(individual_pos[[x]], chr_data)))
       return(individual_pos[[x]])
     })
     names(individual_pos) <- unique(collapsed_segs$chr)
-    
     pos_list <- lapply(1:nrow(collapsed_segs), function(x){
       cns = individual_pos[[collapsed_segs[x]$chr]]
       cns[cns == collapsed_segs[x]$CN] <- collapsed_segs[x]$scn
       cns
     })
-    
-    current_segment_mappings %>% filter(chr == "15") %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
-    #t_map <- data.table::copy(current_segment_mappings)
-    #collapsed_segs[,c("chr", "segment", "CN", "pos", "end")][t_map, on = c("chr", "pos")]
-    #t_map %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = segment == 80)) + geom_point() + scale_color_viridis(discrete = T)
-    
-    #t1 = Sys.time()
+    ## Now that the per-segment/chr noisiness is corrected, compute likelihoods for focal CNV detection
+    ## We compute GMM likelihoods for segmented depth and raw depth, and look for discordant calls
     current_joint_probs <- maf_gmm_fit_subclonal_prior_segments(depth_data = current_segment_mappings$corrected_depth, vaf_data = current_segment_mappings$maf, chr_vec = current_segment_mappings$chr, means = iteration_positions, variances = iteration_var, ploidy = ploidy, maxpeak = iteration_maxpeak, maf_variances = maf_variance, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
-    #t2 = Sys.time()
-    
-    #t3 <- Sys.time()
-    #current_joint_probs <- maf_gmm_fit_subclonal_prior_segments(depth_data = current_segment_mappings$corrected_depth, vaf_data = current_segment_mappings$maf, chr_vec = current_segment_mappings$chr, means = iteration_positions, variances = iteration_var, ploidy = ploidy, maxpeak = iteration_maxpeak, maf_variances = maf_variance, tp = tp, cn_list = individual_pos)
-    #t4 <- Sys.time()
-    #fill_cols <- data.table(matrix(0, ncol = length(iteration_subclonal_positions), nrow = nrow(current_joint_probs$jp_tbl)))
-    #colnames(fill_cols) <- names(iteration_subclonal_positions)
     segged_joint_probs <- maf_gmm_fit_subclonal_prior_segments(depth_data = current_segment_mappings$segment_depth, vaf_data = current_segment_mappings$maf, chr_vec = current_segment_mappings$chr, means = iteration_positions, variances = iteration_var, ploidy = ploidy, maxpeak = iteration_maxpeak, maf_variances = maf_variance, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
-    
     
     current_joint_probs <- current_joint_probs$jp_tbl
     current_joint_resps <- current_joint_probs/rowSums(current_joint_probs)
@@ -785,48 +725,36 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     segged_joint_probs <- segged_joint_probs$jp_tbl
     segged_joint_resps <- segged_joint_probs/rowSums(segged_joint_probs)
     
+    ##Compress transitions by segment
     compressed_joint_resps <- data.table::copy(segged_joint_probs)
     compressed_joint_resps <- cbind(compressed_joint_resps, current_segment_mappings[,c("chr", "segment")])
     compressed_joint_resps <- compressed_joint_resps[, lapply(.SD, mean), by = list(chr, segment)]
+    ## Mark ends of chromosomes
     chr_ends <- which(!na_or_true(shift(x = compressed_joint_resps$chr, type = "lead") == compressed_joint_resps$chr))
+    ## Convert likelihoods into responsibilities, set NAs to 0 (don't match any GMM component)
     compressed_joint_resps <- compressed_joint_resps[,c("chr", "segment"):= NULL]
-    #seg_metric <- quantile(apply(compressed_joint_resps, 1, max), probs = 0.25)
     compressed_joint_resps <- compressed_joint_resps/rowSums(compressed_joint_resps)
     compressed_joint_resps[which(is.na(compressed_joint_resps[,1])),] <- 0
-    #
-    #
-    
+    ## Get transition metrics for each meta-bin
     metric <- rowSums(abs(current_joint_resps - segged_joint_resps))
     metric[is.na(metric)] <- 2
-    
-    #metric[which(apply(current_joint_probs, 1, max) <= seg_metric)] <- 0
+    ## Try to get a threshold to introduce segment breaks
     shift_vec <- rowSums(abs(apply(compressed_joint_resps, 2, diff)))[-chr_ends]
-    break_metric <- quantile(shift_vec, prob = 0.5)
-    consider_metric <- quantile(shift_vec, prob = 0.25)
-    
     break_metric <- quantile(metric, prob = 0.99)
     
-    ## Monte carlo simulation of the null hypothesis
+    ## Simulate the null hypothesis (constant-CN segment) to get a conservative threshold from this
     set.seed(42069)
     simulation_results = c()
-    
     v_tbl = current_segment_mappings[,.(v = as.double(sd(corrected_depth)), s = as.double(sum(end - pos)), m = as.double(mean(corrected_depth))), by = c("CN")][order(CN)]
-    
-    #if(nrow(v_tbl[s > quantile(s, 0.75)]) >= 3){
-      
-    #}
-    
+    ## Variance for the simulation
     sim_var = max(current_segment_mappings[,.(v = as.double(sd(corrected_depth)), s = as.double(sum(end - pos)), m = as.double(mean(corrected_depth))), by = c("CN")][order(CN)][s > quantile(s, 0.75)]$v)
-    
-    
+    ## Variance is linearly proportional to copy number, so we use a linear model to get 
+    ## variance estimates for each copy number
     if(nrow(v_tbl[s > quantile(s, 0.75)]) >= 3){
       lm_var = lm(v ~ CN, data = v_tbl[s > quantile(s, 0.75)], weights = s)
     }else{
       lm_var = lm(v ~ CN, data = data.table(CN = c(ploidy - 1, ploidy, ploidy + 1), v = rep(v_tbl[which.max(s)]$v, 3)))
     }
-    #lm()
-    #sim_var = max(sim_var, iteration_var_nonmod)
-    #sim_var = iteration_var_nonmod
     ## Function to perform a round of MC simulation for a segment with no true breakpoints
     simulate_threshold = function(median_depth, segment_variance, model_variance, component_means, sim_size = 10000){
       simulated_seg = rnorm(sim_size, mean = median_depth, sd = segment_variance)
@@ -839,7 +767,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       simulated_thresh = rowSums(abs(simulated_segged - simulated_nonsegged))
       return(max(simulated_thresh[-which.max(simulated_thresh)]))
     }
-    
+    ## Get a separate transition threshold for each copy number
     thresh_by_cn = lapply(v_tbl$CN[v_tbl$CN == round(v_tbl$CN)], function(sim_cn){
       simulation_results = rep(NA, 10)
       for(z in 1:10){
@@ -847,59 +775,34 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       }
       return(structure(median(simulation_results), names = sim_cn))
     })
+    ## Table of thresholds by copy number
     thresh_by_cn = data.table("t" = unlist(thresh_by_cn), "CN" = as.numeric(names(unlist(thresh_by_cn))))
-    
-    
-    #simulation_results = rep(NA, 10)
-    #for(z in 1:10){
-    #  simulation_results[z] = simulate_threshold(iteration_clonal_positions[names(iteration_clonal_positions) == ploidy], sim_var, iteration_var, iteration_clonal_positions)
-    #}
-    
-    
-    #break_metric = median(simulation_results)
-    #plot(density(simulated_thresh))
-    
-    #ggplot(data.frame(simulated_seg), aes(x = 1:length(simulated_seg), y = simulated_seg, color = abs(simulated_seg - median(simulated_seg)) >= get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff)) + geom_point() + scale_color_viridis(discrete = T) + theme(legend.position = "none")
-    #quantile(metric, prob = c(0.9, 0.95, 0.975, 0.98, 0.99, 0.999, 0.99999))
-    
+    ## Fill missing GMM components between the two tables
     if(ncol(segged_joint_resps) < ncol(current_joint_resps)){
       segged_joint_resps[,names(current_joint_resps)[!names(current_joint_resps) %in% names(segged_joint_resps)]] <- 0
     }
-    
+    ## Table of transition scores and CNs
     metric_df = data.table("metric" = metric, "CN" = round(current_segment_mappings$CN))
-    
+    ## Merge thresholds per CN with table of scores, identify putatitve segment breaks
     metric_df = thresh_by_cn[metric_df, on = "CN"]
-    
     breaks = metric_df$metric >= metric_df$t
-    
-    #current_segment_mappings %>% mutate("prob" = breaks) %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = T, name = "Flagged") + xlab("Position") + ylab("Read Depth") + theme_cowplot()
-    #current_segment_mappings %>% mutate("prob" = metric_df$metric) %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = F)
-    #current_segment_mappings %>% mutate("prob" = apply(current_joint_resps, 1, max)) %>%  filter(chr == "10") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob)) + geom_point() + scale_color_viridis(discrete = F)
-    
-    #plot_segments(current_segment_mappings$chr, 10, current_segment_mappings$pos, current_segment_mappings$corrected_depth, current_segment_mappings$segment)
-    
-    #old flagging
-    #current_segment_mappings$flagged <- (metric >= break_metric) | abs(current_segment_mappings$corrected_depth - current_segment_mappings$segment_depth) > get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff*2
-    # new flagging
-    
+    ## Flag regions to break if they were identified above, or if they have a big shift in depth
+    ## consistent with a 2-copy change (1-copy can introduce noise in very high resolution data)
     current_segment_mappings$flagged <- breaks | abs(current_segment_mappings$corrected_depth - current_segment_mappings$segment_depth) > get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$diff*2
-    
-    
+    ## use graph-based flagging/breaking to break & merge data back
     edge_vec <- c(1, rep(2:(nrow(current_segment_mappings)-1), each = 2), nrow(current_segment_mappings))
     g <- graph(edges = c(1, rep(2:(nrow(current_segment_mappings)-1), each = 2), nrow(current_segment_mappings)), directed = F)
     g <- set_vertex_attr(g, name = "chr", value = current_segment_mappings$chr)
-    
+    ## Does the chromosome match the lead chromosome? Use to find ends
     current_segment_mappings[, match := !na_or_true(chr == data.table::shift(chr, type = "lead"))]
-    
+    ## We should always break the ends of the segments
     chr_ends <- which(current_segment_mappings$match)
     segment_ends <- which(diff(current_segment_mappings$segment) != 0)
     segment_ends <- sort(c(segment_ends - 1, segment_ends, segment_ends + 1))
     if(any(segment_ends > max(E(g)))){
       segment_ends <- segment_ends[-which(segment_ends > max(E(g)))]
     }
-    
-    #current_segment_mappings %>% mutate("prob" = metric) %>%  filter(chr == "1") %>% ggplot(aes(x = pos, y = corrected_depth, color = prob >= break_metric)) + geom_point() + scale_color_viridis(discrete = T)
-    
+    ## Get indices which have NA likelihoods so we always break these
     outlier_points <- which(current_segment_mappings$flagged)
     na_inds <- which(is.na(apply(current_joint_resps[outlier_points,], 1, sum)))
     na_inds <- unique(c(na_inds, which(is.na(apply(segged_joint_resps[outlier_points,], 1, sum)))))
@@ -907,80 +810,47 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       na_points <- outlier_points[na_inds]
       outlier_points <- outlier_points[-na_inds]
     }else{na_points <- c()}
-    
-    
+    ## because subclones are a scourge, and allowing focal subclonal CNV detection introduces a ton of noise,
+    ## we only allow new focal CNVs to be clonal
     alt_fits <- as.numeric(names(iteration_positions)[apply(current_joint_resps[outlier_points,], 1, which.max)])
     orig_fits <- as.numeric(names(iteration_positions)[apply(segged_joint_resps[outlier_points,], 1, which.max)])
     to_subclonal <- which(alt_fits != round(alt_fits) & (alt_fits != orig_fits))
-    
+    ## Flag meta-bins which changed a lot
     outlier_points <- c(outlier_points[-to_subclonal], na_points)
     outlier_edges <- unique(sort(c(outlier_points - 1, outlier_points)))
     outlier_edges <- outlier_edges[outlier_edges > 0 & outlier_edges < max(edge_vec) - 1]
-    
+    ## concatenate regions to break segments at
     to_delete <- unique(sort(c(chr_ends, segment_ends, outlier_edges)))
-    
-    #print("del_edges")
-    
-    #print(unique(sort(chr_ends)))
-    #print(unique(sort(segment_ends)))
-    #print(unique(sort(outlier_edges)))
-    
+    ## Break segments
     g <- delete_edges(g, to_delete)
-    
+    ## Get broken segments
     busted_segs <- components(g)$membership
     busted_segment_mappings <- data.table::copy(current_segment_mappings)
-    
-    
     busted_segment_mappings$segment <- busted_segs
     busted_segment_mappings[, segment_depth := median(corrected_depth), by = segment]
-    
-    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>%  filter(chr == "1", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = flagged)) + geom_point() + scale_color_viridis(discrete = T) + geom_hline(yintercept = iteration_clonal_positions[iteration_clonal_positions < 15000])
-    
-    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>%  filter(chr == "2", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F) + geom_hline(yintercept = iteration_clonal_positions[iteration_clonal_positions < 15000])
-    
+    ## Get new estimates
     df_depths = data.frame(cn = as.numeric(names(iteration_positions)), segment_depth = iteration_positions)
     lm_depths = lm(cn ~ segment_depth, data = df_depths)
-    
-    
+    ## Re-compute mixture model fit
     busted_jp_tbl <- maf_gmm_fit_subclonal_prior_segments(depth_data = busted_segment_mappings$segment_depth, vaf_data = busted_segment_mappings$maf, chr_vec = busted_segment_mappings$chr, means = iteration_positions, variances = variance/(unaltered/val), maf_variances = maf_variance, maxpeak = iteration_maxpeak, ploidy = ploidy, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
-    
-    
+    ## Re-segment to enable broken ends to heal with old segments
     healed_segments <- ploidetect_prob_segmentator(prob_mat = busted_jp_tbl$jp_tbl, ploidy = ploidy, chr_vec = busted_segment_mappings$chr, seg_vec = busted_segment_mappings$segment, verbose = T, dist_vec = current_segment_mappings$segment_depth, subclones_discovered = T)
-    
-    #busted_segment_mappings$segment <- healed_segments
-    
-    
-    #healed_segments <- unlist(lapply(unique(busted_segment_mappings$chr), function(x){print(x);seed_seg_existing(to_seg = busted_segment_mappings[chr == x]$corrected_depth, 
-    #                                                                                                              old_segs = current_segment_mappings[chr == x]$segment, 
-    #                                                                                                             existing_segs = busted_segment_mappings[chr == x]$segment)}))
-    
     busted_segment_mappings$segment <- healed_segments
-    
     busted_segment_mappings[,segment_depth:=median(corrected_depth), by = list(chr, segment)]
-    
-    
-    
-    #busted_segment_mappings %>% mutate() %>% filter(chr == "1", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F) + theme_cowplot() + xlab("Position") + ylab("Read Depth") + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
-    #busted_segment_mappings %>% mutate() %>% filter(chr == "21", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F)
-    
-    
+    ## Remember all the checks for bad subclonal cnvs that we did earlier? They don't 100% work
+    ## Bin shifts that were predicted to result in clonal CNVs end up resulting in subclonal CNVs
+    ## which should not have been allowed to occur. So we need to fix that.
+    ## Not sure if this should live here or not, or if a function is needed. I think in a previous 
+    ## version it was. But I'll keep it as-is.
     repair_subcl_segs <- function(means, variances, maf_variances, maxpeak, tp, ploidy, cn_list, pos_list, seg_tbl, previous_jp_tbl, busted_segment_mappings){
       merge_dt <- busted_segment_mappings[,c("chr", "segment")]
       n_segs <- nrow(unique(merge_dt))
       healed_jp_tbl <- maf_gmm_fit_subclonal_prior_segments(depth_data = busted_segment_mappings$segment_depth, vaf_data = busted_segment_mappings$maf, chr_vec = busted_segment_mappings$chr, means = iteration_positions, variances = variance/(unaltered/val), maf_variances = maf_variance, maxpeak = iteration_maxpeak, ploidy = ploidy, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
-      
       off_the_scale = which(rowSums(healed_jp_tbl$jp_tbl) == 0)
-      
-      
       full_orig_fits <- as.numeric(names(previous_jp_tbl)[apply(previous_jp_tbl, 1, which.max)])
       full_orig_fits <- unlist(cbind(full_orig_fits, merge_dt)[,.(full_orig_fits = median(full_orig_fits)), by = list(chr, segment)][,-c("chr", "segment")])
       full_new_fits <- as.numeric(names(healed_jp_tbl$jp_tbl)[apply(healed_jp_tbl$jp_tbl,1,which.max)])
-      full_new_fits <- unlist(cbind(full_new_fits, merge_dt)[,.(full_new_fits = median(full_new_fits)), by = list(chr, segment)][,-c("chr", "segment")])
-      
-      #busted_segment_mappings %>% mutate("CN" = full_new_fits) %>% filter(chr == "18", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
-      
-      #full_new_fits[unique(merge_dt)$chr == "18"]
-      
+      full_new_fits <- unlist(cbind(full_new_fits, merge_dt)[,.(full_new_fits = median(full_new_fits)), by = list(chr, segment)][,-c("chr", "segment")]
       ## Check for regions which transition from clonal to subclonal
       subcl_transition <- which(abs(full_orig_fits - full_new_fits) < 1 & abs(full_orig_fits - full_new_fits) != 0 & full_new_fits != round(full_new_fits))
       prec_clonal <- na_or_true(shift(full_new_fits)[subcl_transition] == round(shift(full_new_fits))[subcl_transition])
@@ -992,22 +862,16 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       subcl_transition <- subcl_transition[na_or_true(shift(full_new_fits)[subcl_transition] == shift(full_new_fits, type = "lead")[subcl_transition])]
       ### Now get the chr,seg combinations with bad segments
       bad_seg_maps <- unique(merge_dt)[subcl_transition]
-      
-      ## Check for transitions from subclonal to other subclonal
-      
       ## Merge segments using a graph
       g <- graph(edges = c(1, rep(2:(nrow(busted_segment_mappings)-1), each = 2), nrow(busted_segment_mappings)), directed = F)
       
+      ## Basically repeat the earlier process of getting chr/segment ends
       segment_ends <- which(busted_segment_mappings$segment != shift(busted_segment_mappings$segment, type = "lead"))
       chr_ends <- which(busted_segment_mappings$chr != shift(busted_segment_mappings$chr, type = "lead"))
-      
       tot_ends <- sort(unique(segment_ends, chr_ends))
-      
-      
       ends_tbl <- busted_segment_mappings[tot_ends]
-      
       ends_tbl$ind <- 1:nrow(ends_tbl)
-      
+      ## Get new segment ends
       if(nrow(bad_seg_maps) > 0){
         filt_ends = ends_tbl[bad_seg_maps,, on = c("chr", "segment")]$ind
         filt_ends = filt_ends[!is.na(filt_ends)]
@@ -1015,73 +879,53 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       }else{
         new_ends <- tot_ends
       }
-      
       new_ends <- sort(unique(c(new_ends, chr_ends)))
-      
+      ## Delete edges corresponding to segment ends, extract segment mappings
       g <- delete_edges(g, new_ends)
-      
       busted_segment_mappings$segment <- components(g)$membership
       busted_segment_mappings[,segment_depth:=median(corrected_depth), by = list(chr, segment)]
+      ## Get new GMM of likelihoods
       merge_jp_tbl <- maf_gmm_fit_subclonal_prior_segments(depth_data = busted_segment_mappings$segment_depth, vaf_data = busted_segment_mappings$maf, chr_vec = busted_segment_mappings$chr, means = iteration_positions, variances = variance/(unaltered/val), maf_variances = maf_variance, maxpeak = iteration_maxpeak, ploidy = ploidy, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
       busted_segment_mappings$call <- as.numeric(names(merge_jp_tbl$jp_tbl)[apply(merge_jp_tbl$jp_tbl, 1, which.max)])
       busted_segment_mappings$CN <- busted_segment_mappings$call
-      
-      #busted_segment_mappings %>% mutate() %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = CN)) + geom_point() + scale_color_viridis(discrete = F)
-      
-      
-      ## Fix cases where same CN in consecutive segments
+      ## Fix cases where same CN in consecutive segments, which shouldn't happen, but it does. 
       fixed_breaks <- which(busted_segment_mappings$chr != shift(busted_segment_mappings$chr, type = "lead") | busted_segment_mappings$CN != shift(busted_segment_mappings$CN, type = "lead"))
       g <- graph(edges = c(1, rep(2:(nrow(busted_segment_mappings)-1), each = 2), nrow(busted_segment_mappings)), directed = F)
       g <- delete_edges(g, fixed_breaks)
+      ## Re-map segments, get new GMM of likelihoods
       busted_segment_mappings$segment <- components(g)$membership
       busted_segment_mappings[,segment_depth:=median(corrected_depth), by = list(chr, segment)]
       merge_jp_tbl <- maf_gmm_fit_subclonal_prior_segments(depth_data = busted_segment_mappings$segment_depth, vaf_data = busted_segment_mappings$maf, chr_vec = busted_segment_mappings$chr, means = iteration_positions, variances = variance/(unaltered/val), maf_variances = maf_variance, maxpeak = iteration_maxpeak, ploidy = ploidy, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs)
+      ## Get newest calls with the filtered breakpoints
       busted_segment_mappings$call <- as.numeric(names(merge_jp_tbl$jp_tbl)[apply(merge_jp_tbl$jp_tbl, 1, which.max)])
       busted_segment_mappings[off_the_scale]$call <- round(predict(lm_depths, busted_segment_mappings[off_the_scale]))
       busted_segment_mappings$CN <- busted_segment_mappings$call
       f_n_segs <- nrow(unique(busted_segment_mappings[,c("chr", "segment")]))
       return(busted_segment_mappings)
     }
-    
+    ## Run the above function to repair errors made through subclone inclusion
     busted_segment_mappings <- repair_subcl_segs(means = iteration_positions, variances = variance/(unaltered/val), maf_variances = maf_variance, maxpeak = iteration_maxpeak, ploidy = ploidy, tp = tp, cn_list = individual_pos, pos_list = pos_list, seg_tbl = collapsed_segs, previous_jp_tbl = segged_joint_resps, busted_segment_mappings = busted_segment_mappings)
-    
-    #plot_segments(busted_segment_mappings$chr, 1, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment) + scale_x_continuous(limits = c(1.6e+08, 2.0e+08))
-    
-    #busted_segment_mappings %>% mutate() %>% filter(chr == "1", CN < 10) %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
-    
-    #busted_segment_mappings[chr == 1 & pos > 1.9e+08 & pos < 2e+08]
-    
+    ## Compute segment lengths to check if segment n50 has gone off a cliff due to oversegmentation
     seg_lens <- busted_segment_mappings[,.("pos" = first(pos), "end" = last(end)), by = list(chr, segment)][,.(diff=end-pos)]$diff
     seg_lens <- seg_lens[seg_lens > 0]
     previous_n50 <- current_n50
     previous_median_length <- current_median_length
     current_n50 <- n50_fun(seg_lens)
     current_median_length <- median(seg_lens)
-    
-    #n50s = c(n50s, current_n50)
-    #cn_calls <- data.table::copy(busted_jp_tbl$jp_tbl)
-    #cn_calls <- cbind("chr" = busted_segment_mappings$chr, "segment" = busted_segment_mappings$segment, cn_calls)
-    #cn_calls <- cn_calls[,lapply(.SD, mean), .SDcols = 3:ncol(cn_calls), by = list(chr, segment)]
-    #cn_calls[,call:=as.numeric(names(cn_calls[,3:ncol(cn_calls)])[which.max(.SD)]), by = 1:nrow(cn_calls), .SDcols = 3:ncol(cn_calls)]
-    #cn_calls <- cn_calls[,c(1:2, ncol(cn_calls)), with = F]
-    #busted_segment_mappings <- cn_calls[busted_segment_mappings, on = c("chr", "segment")]
-    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = CN == 0)) + geom_point() + scale_color_viridis(discrete = T)
-    #busted_segment_mappings %>% mutate("prob" = apply(current_joint_probs, 1, max)) %>% filter(chr == "3", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = factor(CN))) + geom_point() + scale_color_viridis(discrete = T)
-    #busted_segment_mappings %>% filter(chr == "1", segment_depth < max(iteration_positions)) %>% ggplot(aes(x = pos, y = corrected_depth, color = segment)) + geom_point() + scale_color_viridis(discrete = F, name = "Segment") + xlab("Position") + ylab("Read Depth") + theme_cowplot() + theme(axis.text = element_text(size = 15), axis.title = element_text(size = 20))
-    
+    ## iterate
     i = i + 1
-    
+    ## 
     obs_pos <- as.numeric(names(table_vec(subcl_seg$CN)))
     obs_pos <- sort(c(obs_pos, (0:10)[!0:10 %in% obs_pos]))
-    
     subcl_pos <- depth(maxpeak = maxpeak, d = get_coverage_characteristics(tp = tp, ploidy = ploidy, maxpeak = maxpeak)$diff, P = ploidy, n = obs_pos)
     
-    
+    ## Recompute maxpeak and the regions used to calculate it
     closeness <- abs(busted_segment_mappings$segment_depth - iteration_maxpeak)
     maxpeak_segments <- unique(busted_segment_mappings[which(closeness < diff(iteration_clonal_positions)[1]/2), c("chr", "segment")])
     maxpeak_segments$mp <- T
+    ## Iteration housekeeping
     
-    
+    ## This is for when we reach maximum resolution & leave the loop "gracefully"
     if(i > length(iterations)){
       cn_positions = iteration_positions
       out_seg_mappings <- data.table::copy(busted_segment_mappings)
@@ -1104,18 +948,17 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       previous_segment_mappings <- previous_segment_mappings[,.(pos = first(pos), CN = median(CN)), by = list(chr, segment)]
       cn_positions = iteration_positions
     }
-    #plot_segments(busted_segment_mappings$chr, 10, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
-    #print(condition)
   }
-  
-  #plot_segments(out_seg_mappings$chr, 1, out_seg_mappings$pos, out_seg_mappings$corrected_depth, out_seg_mappings$segment)
-  
+  ## Call zygosity on output segments
+  ## First get variance of BAFs
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
-  print(out_seg_mappings)
+  ## Output numeric CNs
   out_seg_mappings[,call:=as.numeric(call)]
+  ## Call LOH for all segments
   loh_calls <- out_seg_mappings[,.(zygosity = gmm_loh(maf, call, tp, ploidy, maf_var), call = first(call)), by = list(chr, segment)]
   
+  ## Plotting states are from 0-8
   states <- c(0:8, 8)
   states = data.table(state = states)
   states$state_cn <- c(0:2, 2:3, 3:4, 4:5, 5)
