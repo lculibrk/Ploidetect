@@ -1549,6 +1549,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     
     if(i > length(iterations)){
+      cn_positions = iteration_positions
       out_seg_mappings <- data.table::copy(busted_segment_mappings)
       condition = F
     }
@@ -1577,26 +1578,26 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
-  print(out_seg_mappings)
   out_seg_mappings[,call:=as.numeric(call)]
-  loh_calls <- out_seg_mappings[,.(zygosity = gmm_loh(maf, call, tp, ploidy, maf_var), call = first(call)), by = list(chr, segment)]
+  out_seg_mappings[,c("zygosity", "A", "B") := gmm_loh(maf, call, tp, ploidy, maf_var), by = list(chr, segment)]
   
   states <- c(0:8, 8)
   states = data.table(state = states)
   states$state_cn <- c(0:2, 2:3, 3:4, 4:5, 5)
   states$zygosity <- c(rep("HOM", times = 2), rep(c("HET", "HOM"), times = 4))
   
-  loh_calls$state_cn <- pmin(5, round(loh_calls$call))
+  out_seg_mappings$state_cn <- pmin(5, round(out_seg_mappings$call))
   
-  loh_calls <- states[loh_calls, on = c("state_cn", "zygosity")]
+  out_seg_mappings <- states[out_seg_mappings, on = c("state_cn", "zygosity")]
   
-  loh_calls <- loh_calls[,(names(loh_calls) %in% c("chr", "segment", "state", "zygosity")), with = F]
+  #loh_calls <- loh_calls[,(names(loh_calls) %in% c("chr", "segment", "state", "zygosity")), with = F]
   
-  setcolorder(loh_calls, c("chr", "segment", "state", "zygosity"))
+  #setcolorder(loh_calls, c("chr", "segment", "state", "zygosity"))
   
-  out_seg_mappings <- loh_calls[out_seg_mappings, on = c("chr", "segment")]
+  #out_seg_mappings <- loh_calls[out_seg_mappings, on = c("chr", "segment")]
+  #out_seg_mappings[,c("state", "zygosity", "A", "B")]
   
-  out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity")]
+  out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity", "A", "B")]
   setnames(out_seg_mappings, "call", "CN")
   
   
@@ -1779,7 +1780,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     cna_plots[i] <- list(plot_grid(plot_grid(CNA_plot[[i]], vaf_plot[[i]], ideo_plots[[i]], align = "v", axis = "l", ncol = 1, rel_heights = c(1, 1, 0.1)), legends[[i]], rel_widths = c(1, 0.2)))
   }
   
-  chrs = as.numeric(names(CN_calls))
+  chrs = suppressWarnings(as.numeric(names(CN_calls)))
   sortedchrs = sort(chrs)
   chrs = c(sortedchrs, names(CN_calls)[is.na(chrs)])
   
@@ -1787,7 +1788,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   CN_calls <- do.call(rbind.data.frame, CN_calls)
   
-  segged_CN_calls <- CN_calls[,.(pos = first(pos), end = last(end), CN = first(CN), state = first(state), zygosity = first(zygosity), segment_depth = first(segment_depth)), by = list(chr, segment)]
+  segged_CN_calls <- CN_calls[,.(pos = first(pos), end = last(end), CN = first(CN), state = first(state), zygosity = first(zygosity), segment_depth = first(segment_depth), A = first(A), B = first(B)), by = list(chr, segment)]
   
   return(list("cna_plots" = cna_plots, "cna_data" = CN_calls, "segged_cna_data" = segged_CN_calls))
 }
@@ -1798,24 +1799,25 @@ gmm_loh <- function(in_mafs, CN, tp, ploidy, var){
   if(length(CN) > 1){
     CN = CN[1]
   }
-  if(round(CN) < 2){
-    return("HOM")
+  if(CN <= 1.25){
+    return(list("HOM", CN, 0))
   }
   if(length(mafs) == 0){
-    return("HET")
+    A = round(CN)/2
+    return(list("HET", A, CN - A))
   }
   pred_mafs <- testMAF_sc(CN, tp)
   pred_alleles <- as.numeric(names(pred_mafs))
   
   pred_mafs <- pred_mafs[!pred_alleles < round(floor(max(pred_alleles))/2)]
-  #print(pred_mafs)
   fit <- parametric_gmm_fit(mafs, pred_mafs, var)
   resp <- fit/rowSums(fit)
   out_lik <- colSums(fit * resp)
-  if(floor(as.numeric(names(out_lik)[which.max(out_lik)])) == floor(CN)){
-    return("HOM")
+  A = as.numeric(names(out_lik)[which.max(out_lik)])
+  if(CN - as.numeric(names(out_lik)[which.max(out_lik)]) <= 0.25){
+    return(list("HOM", A, CN - A))
   }else{
-    return("HET")
+    return(list("HET", A, CN - A))
   }
 }
 
