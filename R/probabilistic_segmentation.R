@@ -1672,7 +1672,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   plot_calls[suppressWarnings(log2(corrected_depth)) < minbound, underflow:=T]
   plot_calls[,corrected_depth:=pmin(2^maxbound, corrected_depth)]
   plot_calls[,corrected_depth:=pmax(2^minbound, corrected_depth)]
-  
+ 
   plot_calls = split(plot_calls, plot_calls$chr)
   
   ## Lower bound on CN
