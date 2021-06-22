@@ -835,13 +835,17 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     predictedpositions = sort(c(predictedpositions, depth(maxpeak, d_diff, ploidy, n = missing)))
   }
   ## Correct for X chromosome being single-copy in males that was otherwise normalized out during preprocessing
+  ## Check if the case is a male
   sizes = all_data$end - all_data$pos
-  xrat = median(sizes[all_data$chr == "X"])/median(sizes[all_data$chr != "X"])
-  all_data$tumour[all_data$chr == "X"] = all_data$tumour[all_data$chr == "X"]/xrat
-  
-  s_sizes = segmented_data$end - segmented_data$pos
-  xrat = median(s_sizes[segmented_data$chr == "X"])/median(s_sizes[segmented_data$chr != "X"])
-  segmented_data[chr == "X"]$corrected_depth = segmented_data[chr == "X"]$corrected_depth/xrat
+  autosomes = sizes[!all_data$chr %in% c("X", "Y")]
+  sex_chrs = sizes[all_data$chr %in% c("X", "Y")]
+  expected_x = median(autosomes)/2
+  sex_fit = parametric_gmm_fit(sex_chrs, c(expected_x, median(autosomes)), get_good_var(expected_x, median(autosomes), base = 5))
+  if(which.max(colSums(sex_fit)) == 1){
+    ## Male
+    all_data$tumour[all_data$chr == "X"] = all_data$tumour[all_data$chr == "X"]/2
+    segmented_data[chr == "X"]$corrected_depth = segmented_data[chr == "X"]$corrected_depth/2
+  }
   
   ## Estimate variance based on KDE matching
   variance <- density(segmented_data$corrected_depth)$bw
