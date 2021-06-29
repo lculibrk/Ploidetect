@@ -1658,7 +1658,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
   plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
   
-  
+
   minbound = max(min(log2(plot_calls$corrected_depth)), log2(min(2^plt_positions) - diff(2^plt_positions)[1]), na.rm = T)
   maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
   
