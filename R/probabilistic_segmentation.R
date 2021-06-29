@@ -1553,7 +1553,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     
     if(i > length(iterations)){
-      cn_positions = iteration_positions
+      cn_positions = get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$cn_by_depth
       out_seg_mappings <- data.table::copy(busted_segment_mappings)
       condition = F
     }
@@ -1572,7 +1572,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
       previous_segment_mappings <- data.table::copy(busted_segment_mappings)
       out_seg_mappings <- data.table::copy(previous_segment_mappings)
       previous_segment_mappings <- previous_segment_mappings[,.(pos = first(pos), CN = median(CN)), by = list(chr, segment)]
-      cn_positions = iteration_positions
+      cn_positions = get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$cn_by_depth
     }
     #plot_segments(busted_segment_mappings$chr, 10, busted_segment_mappings$pos, busted_segment_mappings$corrected_depth, busted_segment_mappings$segment)
     #print(condition)
@@ -1607,8 +1607,9 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   CN_palette <- c("#000000FF", # Black
                   "#2aa4caFF", # Blue
-                  "#776388FF", # Light purple
-                  "#694588FF", # Purple
+                  "#979797FF", # Light purple
+                  #"#694588FF", # Purple
+                  "#757575FF", # Purple
                   "#f6b75eFF", # Light Orange
                   "#f39420FF", # Orange
                   "#89b99aFF", # Light Green
@@ -1657,8 +1658,8 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
   plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
   
-  
-  minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
+
+  minbound = max(min(log2(plot_calls$corrected_depth)), log2(min(2^plt_positions) - diff(2^plt_positions)[1]), na.rm = T)
   maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
   
   plot_calls[,c("overflow", "underflow"):=F]
@@ -1766,8 +1767,13 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   })
   vaf_plot <- lapply(plot_calls, function(x){
     chr = x$chr[1]
-    x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)][1] | pos > centromeres$end[which(centromeres$chr %in% chr)][2]) %>% filter(!is.na(maf)) %>% ggplot(aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state))) + 
+    x[,size:=1]
+    x[state == 0, size:=2]
+    ggplot(data = x[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0][!is.na(maf)], 
+           aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state))) + 
       geom_point_rast(size = 1, alpha = 0.5, aes(shape = factor(state))) + 
+      geom_point_rast(x[state == 0], mapping = aes(shape = factor(state)), stroke = 1) +
+      scale_size_identity() +
       scale_shape_manual(values = plot_shapes, 
                          labels = plot_labs,
                          name = "State") +
