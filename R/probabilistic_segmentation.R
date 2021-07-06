@@ -1049,7 +1049,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   #plot_density_gmm(data = reduced_mappings$segment_depth, means = base_characteristics$cn_by_depth, weights = rep(1, times = 11), sd = variance/unaltered)
   
-  iterations <- round(unaltered/2^(1:ceiling(log2(unaltered))))
+  iterations <- unique(round(unaltered/2^(1:ceiling(log2(unaltered)))))
   if(!all(c(1, 2) %in% iterations)){
     iterations <- c(iterations[1:min(which(iterations == 1) - 1)], 2, 1)
   }
@@ -1057,7 +1057,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   ## Re-estimate maxpeak
   ploidy <- as.numeric(names(subcl_pos)[which.min(abs(density(subcl_seg$segment_depth, n = 2^16)$x[which.max(density(subcl_seg$segment_depth, n = 2^16)$y)] - subcl_pos))])
   maxpeak <- density(subcl_seg$segment_depth, n = 2^16)$x[which.max(density(subcl_seg$segment_depth, n = 2^16)$y)]
-  
+  cn_positions = get_coverage_characteristics(tp, ploidy, maxpeak)$cn_by_depth
   closeness <- abs(subcl_seg$segment_depth - maxpeak)
   maxpeak_segments <- unique(subcl_seg[which(closeness < diff(predictedpositions)[1]/2), c("chr", "segment")])
   
@@ -1085,6 +1085,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   subclonal_seg_mappings <- setnames(rbindlist(seg_mappings), old = "call", new = "CN")
   
+
   
   condition = T
   i = 1
@@ -1553,9 +1554,9 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     
     
     if(i > length(iterations)){
-      cn_positions = iteration_positions
       out_seg_mappings <- data.table::copy(busted_segment_mappings)
       condition = F
+      cn_positions = get_coverage_characteristics(tp, ploidy, iteration_maxpeak)$cn_by_depth
     }
     
     ## Exit case, where the contiguity drops too far. In this case we break the loop and output the previous mappings
@@ -1657,13 +1658,16 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
   plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
   
-  
-  minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
+  if(min(2^plt_positions) - diff(2^plt_positions)[1] <= 0){
+    minbound = min(log2(plot_calls[corrected_depth > 0]$corrected_depth))
+  }else{
+    minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
+  }
   maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
   
   plot_calls[,c("overflow", "underflow"):=F]
-  plot_calls[log2(corrected_depth) > maxbound, overflow:=T]
-  plot_calls[log2(corrected_depth) < minbound, underflow:=T]
+  plot_calls[suppressWarnings(log2(corrected_depth)) > maxbound, overflow:=T]
+  plot_calls[suppressWarnings(log2(corrected_depth)) < minbound, underflow:=T]
   plot_calls[,corrected_depth:=pmin(2^maxbound, corrected_depth)]
   plot_calls[,corrected_depth:=pmax(2^minbound, corrected_depth)]
   
@@ -1766,7 +1770,10 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   })
   vaf_plot <- lapply(plot_calls, function(x){
     chr = x$chr[1]
-    x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)][1] | pos > centromeres$end[which(centromeres$chr %in% chr)][2]) %>% filter(!is.na(maf)) %>% ggplot(aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state))) + 
+    x[,size:=1]
+    x[state == 0, size:=2]
+    ggplot(data = x[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0][!is.na(maf)], 
+           aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state), size = size)) + 
       geom_point_rast(size = 1, alpha = 0.5, aes(shape = factor(state))) + 
       scale_shape_manual(values = plot_shapes, 
                          labels = plot_labs,
