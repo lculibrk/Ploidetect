@@ -3,6 +3,7 @@
 export(adjust_model_ploidy)
 export(collapse_segments)
 export(curate_segments)
+export(focus_view)
 export(load_ploidetect_data)
 export(map_noisy_segments)
 export(most_common)

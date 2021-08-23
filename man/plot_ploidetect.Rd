@@ -4,12 +4,19 @@
 \alias{plot_ploidetect}
 \title{Produce ploidetect-style plots for a copy number profile}
 \usage{
-plot_ploidetect(cna, seg_lines = F)
+plot_ploidetect(
+  cnv_data,
+  cn_positions,
+  cytoband_path,
+  mode = "all",
+  seg_lines = F,
+  colors = "cnv"
+)
 }
 \arguments{
-\item{cna}{a data.table containing the regions of interest. Single chromosome only}
-
 \item{seg_lines}{a boolean of whether to include vertical dashed lines at each segment breakpoint}
+
+\item{cna}{a data.table containing the regions of interest. Single chromosome only}
 }
 \value{
 a ggplot2 plot

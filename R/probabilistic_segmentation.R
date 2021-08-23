@@ -1605,222 +1605,14 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity", "A", "B")]
   setnames(out_seg_mappings, "call", "CN")
-  
-  
-  CN_palette <- c("#000000FF", # Black
-                  "#2aa4caFF", # Blue
-                  "#979797FF", # Light purple
-                  #"#694588FF", # Purple
-                  "#757575FF", # Purple
-                  "#f6b75eFF", # Light Orange
-                  "#f39420FF", # Orange
-                  "#89b99aFF", # Light Green
-                  "#529977FF", # Green
-                  "#ec0077FF", # pink
-
-
-
-
-
-
-
-                  "#FFFFFFFF"
-  )
-#
-#                    "#ec8ebdFF", # Light pink
-  #                  "#6fc0dbFF", # Light Blue
-  names(CN_palette) = c(0:8, 10)
-  
-
-  
-  
-  plot_labs = c("0" = "HOMD", 
-                "1" = "CN = 1", 
-                "2" = "CN = 2 HET", 
-                "3" = "CN = 2 HOM", 
-                "4" = "CN = 3 HET", 
-                "5" = "CN = 3 HOM", 
-                "6" = "CN = 4 HET", 
-                "7" = "CN = 4 HOM", 
-                "8" = "CN = 5+")
-  plot_shapes <- c("0" = 4, 
-                  "1" = 19, 
-                  "2" = 19, 
-                  "3" = 19, 
-                  "4" = 19, 
-                  "5" = 19,
-                  "6" = 19, 
-                  "7" = 19, 
-                  "8" = 19)
+  cytoband_path = Sys.glob("resources/*/cytobands.txt")[1]
   
   CN_calls <- split(out_seg_mappings, f = out_seg_mappings$chr)
-  plot_calls = CN_calls
-  
-  plot_calls = rbindlist(plot_calls)
-  plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
-  plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
-  
-  if(min(2^plt_positions) - diff(2^plt_positions)[1] <= 0){
-    minbound = min(log2(plot_calls[corrected_depth > 0]$corrected_depth))
-  }else{
-    minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
-  }
-  maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
-  
-  plot_calls[,c("overflow", "underflow"):=F]
-  plot_calls[suppressWarnings(log2(corrected_depth)) > maxbound, overflow:=T]
-  plot_calls[suppressWarnings(log2(corrected_depth)) < minbound, underflow:=T]
-  plot_calls[,corrected_depth:=pmin(2^maxbound, corrected_depth)]
-  plot_calls[,corrected_depth:=pmax(2^minbound, corrected_depth)]
- 
-  plot_calls = split(plot_calls, plot_calls$chr)
-  
-  ## Lower bound on CN
-  
-  legend_plot_fn = function(states){
-    plt_df = data.table("state" = 0:8, "cols" = CN_palette[1:9], plot_labs[1:9], plot_shapes[1:9])
-    pairings = data.table("col1" = c(0, 1, 3, 5, 7, NA), "col2" = c(NA, NA, 2, 4, 6, 8))
-    pairings = pairings[col1 %in% plt_df$state | col2 %in% plt_df$state]
-#    plt_df = plt_df[state %in% states]
-    matches = pairings[,lapply(.SD, function(x)x %in% states)]
-    keep_states = unique(unlist(pairings[rowSums(matches) >= 1]))
-    #plt_df = plt_df[state %in% keep_states]
-    plt_df[,y:=which(pairings$col1 %in% state | pairings$col2 %in% state), by = 1:length(state)]
-    plt_df[,x:=as.numeric(which(unlist(pairings[y,]) %in% state)), by = 1:length(state)]
-    plt_df[,x:=pmin(as.numeric(x), 1.15)]
-    plt_df[,y:=(y*0.2) + 0.2]
-    col_vec = plt_df$cols
-    names(col_vec) = plt_df$state
-    label_df = data.table(y = unique(plt_df$y), x = 0.83)
-    cn_tbl = list("0" = 0, "1" = 1, "2" = 2, "3" = 2, "4" = 3, "5" = 3, "6" = 4, "7" = 4, "8" = 5)
-    label_df$label = as.character(unique(unlist(cn_tbl[as.character(plt_df$state)])))
-    if(5 %in% label_df$label){
-      label_df[label == 5]$label = "5+"
-    }
-    #label_df[,label:=paste0(" ", label)]
-    label_df[,just:=0]
-    top_labs = data.table("y" = max(label_df$y) + diff(label_df$y)[1], "x" = c(0.85, 1, 1.15), "label" = c("CN", "HOM", "HET"), "just" = 0.5)
-    label_df = rbind(label_df, top_labs)
-    legend_obj = ggplot(plt_df[state != 0], aes(x = x, y = y, color = as.factor(state), shape = as.factor(state))) + 
-      geom_point(size = 5) + 
-      geom_point(plt_df[state == 0], mapping = aes(x = x, y = y, color = as.factor(state), shape = as.factor(state), stroke = 2)) +
-      theme_void() + 
-      scale_x_continuous(limits = c(0.75, max(plt_df$x) + 0.1)) + 
-      scale_y_continuous(limits = c(-2, max(plt_df$y) + 2.5)) +
-      scale_color_manual(values = col_vec) +
-      theme(legend.position = "none") + 
-      geom_text(data = label_df, mapping = aes(x = x, y = y, label = label, hjust = just), 
-                inherit.aes = F, 
-                size = 3, 
-                fontface = "bold") + 
-      scale_shape_manual(values = plot_shapes)
-    return(legend_obj)
-  }
-  
-  legends = lapply(plot_calls, function(x)legend_plot_fn(x$state))
-
-  
-  
-  CNA_plot <- lapply(plot_calls, function(x){
-    chr = x$chr[1]
-    map_pos = lapply(names(plt_positions), function(k){
-      cn = k
-      k = plt_positions[k]
-      poss_states = unique(states[state_cn == cn]$state)
-      #if(!any(poss_states %in% x$state)){
-      #  return(NA)
-      #}
-      if(length(poss_states) == 1){
-        return(poss_states)
-      }
-      poss_states = x[state %in% poss_states][,.(.N), by = state][order(N, decreasing = T)]$state[1]
-      return(poss_states)
-    })
-    map_pos = unlist(map_pos)
-    lines = data.table(state = as.character(map_pos), y = plt_positions)
-    lines = lines[!is.na(state)]
-    lines = rbind(lines, data.table("state" = 8, y = maxbound))
-    ideal_ord = x[,.N, by = state]
-    x$state = factor(x$state, levels = ideal_ord$state)
-    x = x[order(state)]
-    x$state = as.numeric(as.character(x$state))
-    x$size = 1
-    x[state == 0, size:=2]
-    clipped = x[underflow == T | overflow == T]
-    clipped[,size:=2]
-    ggplot(data = x[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0], 
-           aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = as.character(state), size = size)) + 
-      geom_point_rast(aes(shape = factor(state)), alpha = 0.5) +
-      geom_point_rast(x[state == 0], mapping = aes(x = pos/1e+06, y = log(corrected_depth, base = 2), shape = factor(state)), stroke = 1) + 
-      geom_point_rast(clipped[overflow == T], mapping = aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = as.character(state)), shape = 8) +
-      scale_y_continuous(sec.axis = sec_axis(trans=~.*1, breaks = lines$y, labels = c(states[1:9,][state %in% lines$state]$state_cn, expression("">=20)), name = "Copy Number"), limits = c(minbound, maxbound)) + 
-      scale_x_continuous(limits = c(min(x$pos)/1e+06, max(x$end)/1e+06)) +
-      scale_size_identity() +
-      #geom_rug(data = x[segment != shift(segment)], mapping = aes(x = pos/1e+06), inherit.aes = F) + 
-      geom_hline(data = lines, mapping = aes(yintercept = y, color = state), size = 0.8, linetype = 1, alpha = 0.5) +
-      scale_shape_manual(values = plot_shapes, 
-                         labels = plot_labs,
-                         name = "State") +
-      scale_color_manual(name = "State",
-                         values = CN_palette, 
-                         labels = plot_labs) + 
-      ylab("log(Read Depth)") + 
-      xlab("Position (Mb)") + 
-      ggtitle(paste0("Chromosome ", chr, " copy number profile")) + 
-      theme_bw() + 
-      theme(legend.position = "none")
-  })
-  vaf_plot <- lapply(plot_calls, function(x){
-    chr = x$chr[1]
-    x[,size:=1]
-    x[state == 0, size:=2]
-    ggplot(data = x[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0][!is.na(maf)], 
-           aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state), size = size)) + 
-      geom_point_rast(size = 1, alpha = 0.5, aes(shape = factor(state))) + 
-      geom_point_rast(x[state == 0], mapping = aes(shape = factor(state)), stroke = 1) +
-      scale_size_identity() +
-      scale_shape_manual(values = plot_shapes, 
-                         labels = plot_labs,
-                         name = "State") +
-      scale_color_manual(name = "State",
-                         values = CN_palette, 
-                         labels = plot_labs) + 
-      ylab("Major allele frequency") + 
-      xlab("Position (Mb)") + 
-      ggtitle(paste0("Chromosome ", chr, " allele frequency profile")) + 
-      scale_y_continuous(limits = c(0.5, 1)) +
-      theme_bw() +
-      theme(legend.position = "none",
-            plot.margin = unit(c(5.5,43,5.5,5.5), "pt"))
-  })
-  
-  ### Ideograms
-  ## TODO: take in genome ver and use specific one
-  cytoband_dat = fread(Sys.glob("resources/*/cytobands.txt")[1])
-  ideo_colors = c("gneg" = "white", "gpos25" = "black", "gpos50" = "black", "gpos75" = "black", "gpos100" = "black", "acen" = "red", "gvar" = "black", "stalk" = "black")
-  ideo_alphas = c("gneg" = 0, "gpos25" = .25, "gpos50" = .5, "gpos75" = .75, "gpos100" = 1, "acen" = 1, "gvar" = 1, "stalk" = 0.5)
-  ideo_plots = lapply(plot_calls, function(x){
-    chr = x$chr[1]
-    xlim = max(x$end)
-    ylim = 1
-    ideo_1 = cytoband_dat[V1 == paste0("chr", chr)]
-    
-    t1 = ggplot(ideo_1, aes(xmin = V2, xmax = V3, ymin = 0, ymax = ylim, fill = V5, alpha = V5)) + 
-      geom_rect(color = "black") + 
-      scale_fill_manual(values = ideo_colors) +
-      scale_alpha_manual(values = ideo_alphas) +
-      scale_x_continuous(limits = c(0, xlim), position = "top", breaks = seq(from = 0, to = 2.5e+08, by = 2.5e+07), labels = c(0, paste0(seq(25, 250, by = 25), "Mb"))) +
-      scale_y_continuous(limits = c(-1, 1)) +
-      theme_void() + 
-      theme(legend.position = "none", plot.title = element_text(size = 10), plot.margin = unit(c(5.5,30,5.5,5.5), "pt")) #+ 
-      #geom_text(aes(x = (V2 + V3)/2, y = -0.1, label = V4), inherit.aes = F, angle = 90, size = 3)
-    return(t1)
-  })
 
   cna_plots <- list()
   
-  for(i in 1:length(CNA_plot)){
-    cna_plots[i] <- list(plot_grid(plot_grid(CNA_plot[[i]], vaf_plot[[i]], ideo_plots[[i]], align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legends[[i]], rel_widths = c(1, 0.2)))
+  for(i in 1:length(CN_calls)){
+    cna_plots[i] <- list(plot_ploidetect(CN_calls[[i]], cn_positions, cytoband_path))
   }
   
   chrs = suppressWarnings(as.numeric(names(CN_calls)))
@@ -1833,7 +1625,9 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   segged_CN_calls <- CN_calls[,.(pos = first(pos), end = last(end), CN = first(CN), state = first(state), zygosity = first(zygosity), segment_depth = first(segment_depth), A = first(A), B = first(B)), by = list(chr, segment)]
   
-  return(list("cna_plots" = cna_plots, "cna_data" = CN_calls, "segged_cna_data" = segged_CN_calls))
+  metadata = list(cn_positions = cn_positions)
+  
+  return(list("cna_plots" = cna_plots, "cna_data" = CN_calls, "segged_cna_data" = segged_CN_calls, "calling_metadata" = metadata))
 }
 
 
