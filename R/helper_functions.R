@@ -38,7 +38,7 @@ load_ploidetect_data = function(path){
 #' @param seg_lines a boolean of whether to include vertical dashed lines at each segment breakpoint
 #' @return a ggplot2 plot
 #' @export
-plot_ploidetect = function(cnv_data, cn_positions, cytoband_path, mode = "all", seg_lines = F, colors = "cnv"){
+plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_lines = F, colors = "cnv"){
 	if(!mode %in% c("all", "zoomed")){
 		stop("Invalid mode selected")
 	}
@@ -270,7 +270,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytoband_path, mode = "all", 
 	### Ideograms
 	## TODO: take in genome ver and use specific one
 	cyto_plot_fn = function(cnv_calls, text = F){
-		cytoband_dat = fread(cytoband_path)
+		cytoband_dat = data.table::copy(cytobands)
 		ideo_colors = c("gneg" = "white", "gpos25" = "black", "gpos50" = "black", "gpos75" = "black", "gpos100" = "black", "acen" = "red", "gvar" = "black", "stalk" = "black")
 		ideo_alphas = c("gneg" = 0, "gpos25" = .25, "gpos50" = .5, "gpos75" = .75, "gpos100" = 1, "acen" = 1, "gvar" = 1, "stalk" = 0.5)
 		chr = cnv_calls$chr[1]
@@ -304,22 +304,30 @@ plot_ploidetect = function(cnv_data, cn_positions, cytoband_path, mode = "all", 
 		}
 		return(out_plt)
 	}
-	
-	if(mode == "all"){
-		CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), vaf_plot_fn(cnv_data, colors = colors), cyto_plot_fn(cnv_data), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
-	}else if(mode == "zoomed"){
-		CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), cyto_plot_fn(cnv_data, text = T), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+	if(cytobands == F){
+		if(mode == "all"){
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), vaf_plot_fn(cnv_data, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+		}else if(mode == "zoomed"){
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+		}
+	}else{
+		if(mode == "all"){
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), vaf_plot_fn(cnv_data, colors = colors), cyto_plot_fn(cnv_data), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+		}else if(mode == "zoomed"){
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), cyto_plot_fn(cnv_data, text = T), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+		}
 	}
+
 	return(CNA_plot)
 }
 
 #' @export
-focus_view = function(cnv_calls, chrom, start_position, end_position, colors, cytoband_path){
+focus_view = function(cnv_calls, chrom, start_position, end_position, colors, cytobands){
 	filt_data = cnv_calls[chrom == chr]
 	filt_data = filt_data[chrom == chr & pos >= start_position & end <= end_position]
 	print(chr)
 	print(filt_data)
-	plot_ploidetect(cnv_data = filt_data, cn_positions = cn_positions, cytoband_path = cytoband_path, mode = "zoomed", colors = colors)
+	plot_ploidetect(cnv_data = filt_data, cn_positions = cn_positions, cytobands = cytobands, mode = "zoomed", colors = colors)
 }
 
 #' Produce ploidetect-style plots for a copy number profile at the given chromosome and positions

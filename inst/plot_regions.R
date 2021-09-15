@@ -48,7 +48,10 @@ if(!is.null(args$pos)){
 
 type = args$type
 
-p = focus_view(cnv_data, chr, start, end, type, cytoband_path = args$band)
+cytobands = fread(args$band)
+names(cytobands) =  c("chr", "pos", "end", "band", "type")
+
+p = focus_view(cnv_data, chr, start, end, type, cytobands = cytobands)
 
 png(args$out, type = "cairo")
 p
