@@ -970,15 +970,10 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   ## First get variance of BAFs
   out_maf_sd <- out_seg_mappings[,.(maf_var = sd(unmerge_mafs(maf, flip = T)), n = length(maf)), by = list(chr, segment)]
   maf_var <- weighted.mean(out_maf_sd$maf_var, w = out_maf_sd$n, na.rm = T)
-<<<<<<< HEAD
+
+  ## Call zygosity and ASCN
   out_seg_mappings[,call:=as.numeric(call)]
   out_seg_mappings[,c("zygosity", "A", "B") := gmm_loh(maf, call, tp, ploidy, maf_var), by = list(chr, segment)]
-=======
-  ## Output numeric CNs
-  out_seg_mappings[,call:=as.numeric(call)]
-  ## Call LOH for all segments
-  loh_calls <- out_seg_mappings[,.(zygosity = gmm_loh(maf, call, tp, ploidy, maf_var), call = first(call)), by = list(chr, segment)]
->>>>>>> Almost done R/probabilistic_segmentation.R
   
   ## Plotting states are from 0-8
   states <- c(0:8, 8)
@@ -989,13 +984,6 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   out_seg_mappings$state_cn <- pmin(5, round(out_seg_mappings$call))
   
   out_seg_mappings <- states[out_seg_mappings, on = c("state_cn", "zygosity")]
-  
-  #loh_calls <- loh_calls[,(names(loh_calls) %in% c("chr", "segment", "state", "zygosity")), with = F]
-  
-  #setcolorder(loh_calls, c("chr", "segment", "state", "zygosity"))
-  
-  #out_seg_mappings <- loh_calls[out_seg_mappings, on = c("chr", "segment")]
-  #out_seg_mappings[,c("state", "zygosity", "A", "B")]
   
   out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity", "A", "B")]
   setnames(out_seg_mappings, "call", "CN")
