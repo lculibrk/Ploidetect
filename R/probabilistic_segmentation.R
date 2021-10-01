@@ -971,38 +971,58 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   states$state_cn <- c(0:2, 2:3, 3:4, 4:5, 5)
   states$zygosity <- c(rep("HOM", times = 2), rep(c("HET", "HOM"), times = 4))
   
+  ## Apply plot states and zygosity column to data
   out_seg_mappings$state_cn <- pmin(5, round(out_seg_mappings$call))
-  
   out_seg_mappings <- states[out_seg_mappings, on = c("state_cn", "zygosity")]
   
+  ## Filter columns
   out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity", "A", "B")]
   setnames(out_seg_mappings, "call", "CN")
+
+  ## Load cytobands
+  ## TODO: Replace this with dynamic cytobands (already done in branch)
   cytoband_path = Sys.glob("resources/*/cytobands.txt")[1]
   
+  ## Split data by chromosome
   CN_calls <- split(out_seg_mappings, f = out_seg_mappings$chr)
 
+  ## Generate CNV plots per chromosome
   cna_plots <- list()
-  
   for(i in 1:length(CN_calls)){
     cna_plots[i] <- list(plot_ploidetect(CN_calls[[i]], cn_positions, cytoband_path))
   }
   
+  ## Reorder chromosomes lexicographically
   chrs = suppressWarnings(as.numeric(names(CN_calls)))
   sortedchrs = sort(chrs)
   chrs = c(sortedchrs, names(CN_calls)[is.na(chrs)])
-  
   cna_plots = cna_plots[order(order(chrs))]
   
+  ## Concatenate CNV data
   CN_calls <- do.call(rbind.data.frame, CN_calls)
-  
+
+  ## Aggregate into segment-summary data
   segged_CN_calls <- CN_calls[,.(pos = first(pos), end = last(end), CN = first(CN), state = first(state), zygosity = first(zygosity), segment_depth = first(segment_depth), A = first(A), B = first(B)), by = list(chr, segment)]
   
+  ## Save a metadata object for debugging
   metadata = list(cn_positions = cn_positions)
   
+  ## Return
   return(list("cna_plots" = cna_plots, "cna_data" = CN_calls, "segged_cna_data" = segged_CN_calls, "calling_metadata" = metadata))
 }
 
 
+#' Call LOH from BAF and CNV data
+#' 
+#' \code{gmm_loh} takes in a vector of BAF values, optionally split by "; ", as well as values for copy number, tumor purity, and ploidy.
+#' Uses a gaussian mixture model to estimate the zygosity and allele-specific copy number of a segment.
+#' The function then returns a list object of the zygosity ("HET", or "HOM"), the major allele count, and minor allele count.
+#' @param in_mafs vector of input BAF values, between 0 and 1
+#' @param CN vector of copy number, only first value is used
+#' @param tp number between 0 and 1 of the tumor purity
+#' @param ploidy integer of tumor ploidy
+#' @param var standard deviation to use for GMM fitting
+#' @return a list of zygosity, major allele count and minor allele count
 gmm_loh <- function(in_mafs, CN, tp, ploidy, var){
   mafs <- unmerge_mafs(in_mafs, flip = T)
   if(length(CN) > 1){
