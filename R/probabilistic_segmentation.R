@@ -819,7 +819,7 @@ nonparam_seg = function(dat, init = NA){
   out = c(init, select)
 }
 #' @export
-ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf){
+ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf, cytobands = F){
   ## Get estimated differential depth
   d_diff <- get_coverage_characteristics(tp, ploidy, maxpeak)$diff
   
@@ -1605,14 +1605,13 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
   
   out_seg_mappings <- out_seg_mappings[,c("chr", "pos", "end", "segment", "corrected_depth", "segment_depth", "maf", "call", "state", "zygosity", "A", "B")]
   setnames(out_seg_mappings, "call", "CN")
-  cytoband_path = Sys.glob("resources/*/cytobands.txt")[1]
   
   CN_calls <- split(out_seg_mappings, f = out_seg_mappings$chr)
 
   cna_plots <- list()
   
   for(i in 1:length(CN_calls)){
-    cna_plots[i] <- list(plot_ploidetect(CN_calls[[i]], cn_positions, cytoband_path))
+    cna_plots[i] <- list(plot_ploidetect(CN_calls[[i]], cn_positions, cytobands))
   }
   
   chrs = suppressWarnings(as.numeric(names(CN_calls)))

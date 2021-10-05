@@ -1,4 +1,4 @@
-ploidetect_preprocess <- function(all_data, debugPlots = F, verbose = F, simplify = T, simplify_size = 500000){
+ploidetect_preprocess <- function(all_data, centromeres = F, debugPlots = F, verbose = F, simplify = T, simplify_size = 500000){
   if(verbose & simplify){
     print("Ploidetect - Detection of tumour purity and aneuploidy from whole-genome sequence data")
     print("Thank you for using Ploidetect! Please remember to cite this tool if used in your research ^_^")
@@ -7,9 +7,8 @@ ploidetect_preprocess <- function(all_data, debugPlots = F, verbose = F, simplif
   # Load data
   x <- as.data.frame(all_data)
   
-  # Process centromere data
-  centromeres_preprocess <- centromeres %>% group_by(chr) %>% dplyr::summarise(pos = first(pos), end = last(end))
-  
+
+    
   
   # Test if data is configured and input properly
   if(any(grepl("chr", x$chr))){
@@ -38,26 +37,39 @@ ploidetect_preprocess <- function(all_data, debugPlots = F, verbose = F, simplif
     print("Filtering for chromosomes 1-22 and X")
   }
   x <- x %>% filter(chr %in% paste0(c(1:22, "X")))
-  x <- split(x, x$chr)
-  centromeres_split <- split(centromeres_preprocess, centromeres_preprocess$chr)
   
-  if(verbose){
-    print("Filtering out centromeric loci")
-  }
+
   
-  x <- lapply(x, function(k){
-    chr <- k$chr[1]
-    centro_start <- centromeres_split[[chr]]$pos %>% unlist()
-    centro_end <- centromeres_split[[chr]]$end %>% unlist()
-    #print(str(k))
-    k <- k %>% filter(end < centro_start | pos > centro_end)
-    #print(str(k))
-    return(k)
-  })
-  if(verbose){
-    print("Completed centromere filtering")
+
+  # Process centromere data
+  if(centromeres != F){
+    if(verbose){
+      print("Filtering out centromeric loci")
+    }
+    x <- split(x, x$chr)
+    if(grepl("chr", centromeres$chr[1])){
+      centromeres[,chr:=gsub("chr", "", chr)]
+    }
+    centromeres_preprocess <- centromeres %>% group_by(chr) %>% dplyr::summarise(pos = first(pos), end = last(end))
+    centromeres_split <- split(centromeres_preprocess, centromeres_preprocess$chr)
+    x <- lapply(x, function(k){
+      chr <- k$chr[1]
+      print(chr)
+      print(centromeres_split[[chr]])
+      centro_start <- centromeres_split[[chr]]$pos %>% unlist()
+      centro_end <- centromeres_split[[chr]]$end %>% unlist()
+
+      #print(str(k))
+      k <- k %>% filter(end < centro_start | pos > centro_end)
+      #print(str(k))
+      return(k)
+    })
+    x <- rbindlist(x) %>% arrange(chr, pos)
+    if(verbose){
+      print("Completed centromere filtering")
+    }
   }
-  x <- rbindlist(x) %>% arrange(chr, pos)
+
   
   x$window_size <- x$end - x$pos
   

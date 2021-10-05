@@ -16,18 +16,21 @@
 #library(ggplot2)
 #load("data/centromeres.RData")
 #'@export
-ploidetect_presegment <- function(all_data, simplify_size = 100000){
+ploidetect_presegment <- function(all_data, centromeres = F, simplify_size = 100000){
   
   ## Load centromeres
-  centromeres <- centromeres
-  
+  if(centromeres != F){
+    centromeres = fread(centromeres)
+    names(centromeres) = c("chr", "pos", "end", "band", "type")
+    centromeres = centromeres[type == "acen"]
+  }
+
   ## Add columns to input data
-  
   names(all_data) <- c("chr", "pos", "end", "tumour", "normal", "maf", "gc")
   
   ## Run ploidetect_preprocess
   
-  output <- ploidetect_preprocess(all_data = all_data, simplify_size = simplify_size, debugPlots = T)
+  output <- ploidetect_preprocess(all_data = all_data, centromeres = centromeres, simplify_size = simplify_size, debugPlots = T)
   
   ## Unpack output
   processed_data <- output$x
