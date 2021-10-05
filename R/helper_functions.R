@@ -38,7 +38,9 @@ load_ploidetect_data = function(path){
 #' @param seg_lines a boolean of whether to include vertical dashed lines at each segment breakpoint
 #' @return a ggplot2 plot
 #' @export
+
 plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_lines = F, colors = "cnv"){
+
 	if(!mode %in% c("all", "zoomed")){
 		stop("Invalid mode selected")
 	}
@@ -80,6 +82,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	if(!"chr" %in% names(cytobands)){
 		names(cytobands) = c("chr", "pos", "end", "lab", "stain")
 	}
+
 
 	plot_shapes <- c("0" = 4, 
 									 "1" = 19, 
@@ -270,7 +273,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 			theme(legend.position = "none",
 						plot.margin = unit(c(5.5,43,5.5,5.5), "pt"))
 	}
-	
+
 	### Ideograms
 	## TODO: take in genome ver and use specific one
 	cyto_plot_fn = function(cnv_calls, text = F){
@@ -311,6 +314,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 				
 		}
 		return(out_plt)
+
 	}
 	if(length(cytobands) == 1 & all(cytobands == F)){
 		if(mode == "all"){
