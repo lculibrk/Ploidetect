@@ -47,12 +47,18 @@ ploidetect_preprocess <- function(all_data, centromeres = F, debugPlots = F, ver
       print("Filtering out centromeric loci")
     }
     x <- split(x, x$chr)
+    if(grepl("chr", centromeres$chr[1])){
+      centromeres[,chr:=gsub("chr", "", chr)]
+    }
     centromeres_preprocess <- centromeres %>% group_by(chr) %>% dplyr::summarise(pos = first(pos), end = last(end))
     centromeres_split <- split(centromeres_preprocess, centromeres_preprocess$chr)
     x <- lapply(x, function(k){
       chr <- k$chr[1]
+      print(chr)
+      print(centromeres_split[[chr]])
       centro_start <- centromeres_split[[chr]]$pos %>% unlist()
       centro_end <- centromeres_split[[chr]]$end %>% unlist()
+
       #print(str(k))
       k <- k %>% filter(end < centro_start | pos > centro_end)
       #print(str(k))

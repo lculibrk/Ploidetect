@@ -76,6 +76,10 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	}else{
 		stop("must set \"cnv\" or \"loh\" for colors")
 	}
+	
+	if(!"chr" %in% names(cytobands)){
+		names(cytobands) = c("chr", "pos", "end", "lab", "stain")
+	}
 
 	plot_shapes <- c("0" = 4, 
 									 "1" = 19, 
@@ -196,7 +200,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		clipped = cnv_calls[underflow == T | overflow == T]
 		clipped[,size:=2]
 		if(colors == "cnv"){
-			plot_obj = ggplot(data = cnv_calls[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0], 
+			plot_obj = ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0], 
 												aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = as.character(state), size = size)) + 
 				geom_point_rast(aes(shape = factor(state)), alpha = 0.5) +
 				geom_point_rast(cnv_calls[state == 0], mapping = aes(x = pos/1e+06, y = log(corrected_depth, base = 2), shape = factor(state)), stroke = 1) + 
@@ -218,7 +222,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 				theme_bw() + 
 				theme(legend.position = "none")
 		}else{
-			plot_obj = ggplot(data = cnv_calls[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0], 
+			plot_obj = ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0], 
 						 aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = zygosity, size = size)) + 
 				geom_point_rast(aes(shape = factor(state)), alpha = 0.5) +
 				geom_point_rast(cnv_calls[state == 0], mapping = aes(x = pos/1e+06, y = log(corrected_depth, base = 2), shape = factor(state)), stroke = 1) + 
@@ -247,7 +251,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		chr = cnv_calls$chr[1]
 		cnv_calls[,size:=1]
 		cnv_calls[state == 0, size:=2]
-		ggplot(data = cnv_calls[end < centromeres$pos[centromeres$chr %in% chr][1] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]][state != 0][!is.na(maf)], 
+		ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0][!is.na(maf)], 
 					 aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = factor(state), size = size)) + 
 			geom_point_rast(size = 1, alpha = 0.5, aes(shape = factor(state))) + 
 			geom_point_rast(cnv_calls[state == 0], mapping = aes(shape = factor(state)), stroke = 1) +
@@ -277,10 +281,14 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		xlim = max(cnv_calls$end)
 		xmlim = min(cnv_calls$pos)
 		ylim = 1
-		ideo_1 = cytoband_dat[V1 == paste0("chr", chr)]
-		out_plt = ggplot(ideo_1, aes(xmin = V2, xmax = V3, ymin = 0, ymax = ylim, fill = V5, alpha = V5)) + 
+		if(grepl("chr", cytoband_dat$chr[1])){
+			cytoband_dat[,chr:=gsub("chr", "", chr)]
+		}
+		## used because chr variable name is same as the variable 
+		ideo_1 = cytoband_dat[eval(cytoband_dat[, chr %in% ..chr])]
+		out_plt = ggplot(ideo_1, aes(xmin = pos, xmax = end, ymin = 0, ymax = ylim, fill = stain, alpha = stain)) + 
 			geom_rect(color = "black") + 
-			geom_rect(aes(xmin = min(V2), xmax = max(V3), ymin = 0, ymax = ylim), inherit.aes = F, fill = NA) +
+			geom_rect(aes(xmin = min(pos), xmax = max(end), ymin = 0, ymax = ylim), inherit.aes = F, fill = NA) +
 			scale_fill_manual(values = ideo_colors) +
 			scale_alpha_manual(values = ideo_alphas) +
 			scale_x_continuous(limits = c(0, xlim), position = "top", breaks = seq(from = 0, to = 2.5e+08, by = 2.5e+07), labels = c(0, paste0(seq(25, 250, by = 25), "Mb"))) +
@@ -288,10 +296,10 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 			theme_void() + 
 			theme(legend.position = "none", plot.title = element_text(size = 10), plot.margin = unit(c(5.5,30,5.5,5.5), "pt")) #+ 
 		if(text == T){
-			out_plt = ggplot(ideo_1, aes(xmin = V2, xmax = V3, ymin = 0, ymax = ylim, fill = V5, alpha = V5)) + 
-				geom_text(aes(x = (V2 + V3)/2, y = -0.5, label = V4), inherit.aes = F, angle = 90, vjust = 0.5, check_overlap = T) +
+			out_plt = ggplot(ideo_1, aes(xmin = pos, xmax = end, ymin = 0, ymax = ylim, fill = stain, alpha = stain)) + 
+				geom_text(aes(x = (pos + end)/2, y = -0.5, label = lab), inherit.aes = F, angle = 90, vjust = 0.5, check_overlap = T) +
 				geom_rect(color = "black") + 
-				geom_rect(aes(xmin = pmax(min(V2), xmlim), xmax = pmin(max(V3), xlim), ymin = 0, ymax = ylim), inherit.aes = F, fill = NA, alpha = 1, color = "black") +
+				geom_rect(aes(xmin = pmax(min(pos), xmlim), xmax = pmin(max(end), xlim), ymin = 0, ymax = ylim), inherit.aes = F, fill = NA, alpha = 1, color = "black") +
 				
 				scale_fill_manual(values = ideo_colors) +
 				scale_alpha_manual(values = ideo_alphas) +
@@ -304,7 +312,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		}
 		return(out_plt)
 	}
-	if(cytobands == F){
+	if(length(cytobands) == 1 & all(cytobands == F)){
 		if(mode == "all"){
 			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), vaf_plot_fn(cnv_data, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
 		}else if(mode == "zoomed"){
