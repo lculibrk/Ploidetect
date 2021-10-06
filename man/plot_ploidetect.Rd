@@ -7,7 +7,7 @@
 plot_ploidetect(
   cnv_data,
   cn_positions,
-  cytoband_path,
+  cytobands,
   mode = "all",
   seg_lines = F,
   colors = "cnv"
