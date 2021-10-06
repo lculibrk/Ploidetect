@@ -653,13 +653,7 @@ ploidetect <- function(in_list, call_cna = F){
   max_n50 <- nx_fun(sort(max_n50$end - max_n50$pos), n = 0.5)
   
   max_n50 <- max(n50s)
-  
-  model_params %>% mutate(model_stat = (maf_lik * (1-(mads/mad(new_seg_data$corrected_depth))) * n50s/max_n50) * 1/(1 + n_imputed), order = 1:nrow(.)) %>% ggplot(aes(x = modeling_tp, y = model_stat)) + geom_line()
-  
-  model_params %>% ggplot(aes(x = modeling_tp, y = depth_lik * maf_lik)) + geom_line() + geom_line(aes(x = modeling_tp, y = (1-(mads/mad(new_seg_data$corrected_depth))) * n50s/max_n50, color = "segment metric")) + geom_line(aes(x = modeling_tp, y = n_imputed, color = "jitter metric"))
-  
-  model_params %>% ggplot(aes(x = modeling_tp, y = depth_lik * maf_lik)) + geom_line() + geom_line(aes(x = modeling_tp, y = (1-(mads/mad(new_seg_data$corrected_depth, center = maxpeak))), color = "segment metric")) + geom_line(aes(x = modeling_tp, y = n_imputed, color = "jitter metric"))
-  
+
   
   out_models <- model_params %>%  mutate(model_stat = (depth_lik * maf_lik * (1-(mads/mad(new_seg_data$corrected_depth))) * n50s/max_n50) * 1/(1 + n_imputed), order = 1:nrow(.)) %>% bind_cols(data.frame("seg_agreement" = metric)) %>% filter(tp > 0.05) %>% arrange(desc(model_stat)) %>% mutate(model_stat = model_stat/sum(model_stat)) 
   
