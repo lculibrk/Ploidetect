@@ -155,14 +155,6 @@ ploidetect <- function(in_list, call_cna = F){
         next
       }
     }
-    
-    ## Segment the genome according to d_diff assumption
-    #if(exists("new_CN_calls")){
-    #  new_CN_calls <- ploidetect_resegment(CNAout = new_CN_calls, TC = tp, ploidy = ploidy, depthdiff = d_diff, maxpeak = maxpeak, decision = 1, verbose = F)
-    #}else{
-    #new_CN_calls <- ploidetect_resegment(CNAout = segmented_data, TC = 1, ploidy = 5, depthdiff = d_diff, maxpeak = maxpeak, decision = 1, verbose = F)
-    #segmented_data <- new_CN_calls
-    #}
     # Compute likelihood values
       
     depth_posterior <- parametric_gmm_fit(segmented_data$corrected_depth, means = predictedpositions, variances = em_sd)
@@ -516,29 +508,6 @@ ploidetect <- function(in_list, call_cna = F){
     ## Try segmentation for evaluation
     unaltered <- round(mean(segmented_data$end - segmented_data$pos)/mean(all_data$end - all_data$pos), digits = 0)
     
-    #if(exists("new_CN_calls")){
-    #  new_CN_calls <- ploidetect_resegment(CNAout = new_CN_calls, TC = tp, ploidy = ploidy, depthdiff = get_coverage_characteristics(tp, ploidy, maxpeak)$diff, maxpeak = maxpeak, decision = 1, verbose = F)
-    #}else{
-    #  new_CN_calls <- ploidetect_resegment(CNAout = segmented_data, TC = tp, ploidy = ploidy, depthdiff = get_coverage_characteristics(tp, ploidy, maxpeak)$diff, maxpeak = maxpeak, decision = 1, verbose = F)
-    #}
-    #new_CN_calls <- do.call(rbind.data.frame, new_CN_calls)
-    
-    #new_CN_calls %>% ggplot(aes(x = end - pos, y = segment_depth)) + geom_point(size = 1, alpha = 0.1) + scale_x_continuous(limits = c(0, 2.5e+05)) + scale_y_continuous(limits = c(0, 2.5e+05))
-    
-    #new_CN_calls %>% filter(chr == 9) %>% ggplot(aes(x = pos, y = round(CN, digits = 0), color = round(CN, digits = 0))) + geom_point() + scale_color_viridis()
-    
-    #agg_segs <- new_CN_calls %>% group_by(chr, segment) %>% dplyr::summarise("pos" = first(pos), "end" = last(end), "dp" = mean(segment_depth), CN = mean(CN), "n" = n())
-    
-    #diff_df <- data.frame("dp_d" = abs(diff(agg_segs$dp)), "CN_d" = abs(round(diff(agg_segs$CN))))
-    
-    #diff_df
-    
-    #diff_df$CN_d[diff_df$CN_d == 0] <- 1
-    
-    #cn_diff <- mean(diff_df$dp_d/diff_df$CN_d)
-    
-    #seg_diff <- agg_segs %>% mutate("CN_r" = round(CN, digits = 0)) %>% group_by(CN_r) %>% dplyr::summarise(dp = mean(dp), "n" = sum(n))
-    
     diffsum <- function(x){
       n <- c()
       for(i in 2:length(x)){
@@ -708,119 +677,4 @@ ploidetect <- function(in_list, call_cna = F){
   #cna_calls <- ploidetect_cna_sc(all_data = in_list$all_data, segmented_data = segmented_data, tp = out_models$tp[1], ploidy = out_models$ploidy[1], maxpeak = maxpeak)
   
   return(list("model_info" = out_models, "plots" = exp_plots, "maxpeak" = maxpeak, "segmented_data" = segmented_data))
-}
-
-
-
-ploidetect_cna <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T){
-  #segmented_data <- segmented_data %>% group_by(chr, segment) %>% dplyr::summarise(npoints = n(), pos = min(pos), end = max(end), corrected_depth = sum(corrected_depth), CN = mean(CN), maf = merge_mafs(maf, exp = T))
-  centromeres <- centromeres
-  
-  unaltered <- round(mean(segmented_data$end - segmented_data$pos)/mean(all_data$end - all_data$pos), digits = 0)
-  
-  new_CN_calls <- ploidetect_fineCNAs(all_data = all_data, CNAout = segmented_data, TC = tp, ploidy = ploidy, depthdiff = get_coverage_characteristics(tp, ploidy, maxpeak)$diff, maxpeak = maxpeak, decision = 1, simpsize = 200000, verbose = F, unaltered = unaltered)
-  
-  new_CN_calls <- do.call(rbind.data.frame, new_CN_calls)
-  
-  simplify_size = 100000
-  
-  target_iters <- ceiling(log2(simplify_size/median(all_data$end - all_data$pos)))
-  
-  iters <- 2
-  
-  n50_lengths <- c()
-  n50_lengths <- c(n50_lengths, new_CN_calls %>% group_by(chr, segment) %>% dplyr::summarise("length" = sum(end - pos)) %>% ungroup %>% dplyr::summarise("n50" = n50_segments(length)) %>% unlist())
-  
-  
-  while(iters < (target_iters)){
-    initial_points <- nrow(new_CN_calls)
-    newer_CN_calls <- ploidetect_fineCNAs(all_data = all_data, CNAout = new_CN_calls, TC = tp, ploidy = ploidy, depthdiff = get_coverage_characteristics(tp, ploidy, maxpeak)$diff, maxpeak = maxpeak, decision = 1, simpsize = simplify_size/(2^(iters-1)), unaltered = unaltered, verbose = F)
-    newer_CN_calls <- do.call(rbind.data.frame, newer_CN_calls)
-    n50_lengths <- c(n50_lengths, newer_CN_calls %>% group_by(chr, segment) %>% dplyr::summarise("length" = sum(end - pos)) %>% ungroup %>% dplyr::summarise("n50" = n50_segments(length)) %>% unlist())
-    iters <- iters+1
-    if(nrow(newer_CN_calls) == initial_points){
-      iters <- Inf
-    }
-    if(n50_lengths[length(n50_lengths)] < n50_lengths[length(n50_lengths) - 1]/5){
-      if(T){
-        print(paste0("Exited segmentation early with mean bin size ", mean(newer_CN_calls$end - newer_CN_calls$pos)))
-      }
-      iters <- Inf
-    }else{
-      new_CN_calls <- newer_CN_calls
-    }
-  }
-  
-  CN_calls <- ploidetect_loh(purity = tp, CNA_object = new_CN_calls)
-  
-  CN_calls$state <- factor(CN_calls$state)
-  
-  CN_palette <- c("0" = "#cc0000", 
-                  "1" = "#000066", 
-                  "2" = "#26d953", 
-                  "3" = "#609f70", 
-                  "4" = "#cccc00", 
-                  "5" = "#80804d",
-                  "6" = "#cc6600", 
-                  "7" = "#856647", 
-                  "8" = "#cc0000"
-  )
-  
-  CN_calls <- split(CN_calls, f = CN_calls$chr)
-  
-  CNA_plot <- lapply(CN_calls, function(x){
-    chr = x$chr[1]
-    x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)[1]] | pos > centromeres$end[which(centromeres$chr %in% chr)[2]]) %>% ggplot(aes(x = pos, y = log(corrected_depth + maxpeak), color = as.character(state))) + 
-      geom_point(size = 0.5) + 
-      scale_color_manual(name = "State",
-                         values = CN_palette, 
-                         labels = c("0" = "HOMD", 
-                                    "1" = "CN = 1", 
-                                    "2" = "CN = 2 HET", 
-                                    "3" = "CN = 2 HOM", 
-                                    "4" = "CN = 3 HET", 
-                                    "5" = "CN = 3 HOM", 
-                                    "6" = "CN = 4 HET", 
-                                    "7" = "CN = 4 HOM", 
-                                    "8" = "CN = 5+")) + 
-      ylab("log(Read Depth)") + 
-      xlab("position") + 
-      ggtitle(paste0("Chromosome ", chr, " copy number profile")) + 
-      theme_bw()
-  })
-  
-  vaf_plot <- lapply(CN_calls, function(x){
-    chr = x$chr[1]
-    x %>% filter(end < centromeres$pos[which(centromeres$chr %in% chr)][1] | pos > centromeres$end[which(centromeres$chr %in% chr)][2]) %>% filter(!is.na(maf)) %>% ggplot(aes(x = pos, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = as.character(state))) + 
-      geom_point(size = 0.5) + 
-      scale_color_manual(name = "State",
-                         values = CN_palette, 
-                         labels = c("0" = "HOMD", 
-                                    "1" = "CN = 1", 
-                                    "2" = "CN = 2 HET", 
-                                    "3" = "CN = 2 HOM", 
-                                    "4" = "CN = 3 HET", 
-                                    "5" = "CN = 3 HOM", 
-                                    "6" = "CN = 4 HET", 
-                                    "7" = "CN = 4 HOM", 
-                                    "8" = "CN = 5+")) + 
-      ylab("Major allele frequency") + 
-      xlab("position") + 
-      ggtitle(paste0("Chromosome ", chr, " allele frequency profile")) + 
-      scale_y_continuous(limits = c(0.5, 1)) +
-      theme_bw()
-  })
-  
-  #CN_calls <- ploidetect_segmentator(segmented_data, maxpeak = maxpeak, verbose = F, tp = tp, ploidy = ploidy, segmentation_threshold = 0.75)
-  
-  
-  cna_plots <- list()
-  
-  for(i in 1:length(CNA_plot)){
-    cna_plots[i] <- list(plot_grid(CNA_plot[[i]], vaf_plot[[i]], align = "v", axis = "l", ncol = 1))
-  }
-  
-  CN_calls <- do.call(rbind.data.frame, CN_calls)
-  
-  return(list("cna_plots" = cna_plots, "cna_data" = CN_calls))
 }
