@@ -1,20 +1,5 @@
 #' @import data.table
 #
-## Temporary to source stuff
-#setwd("/projects/lculibrk_prj/CNV/Ploidetect2/")
-#for(i in Sys.glob("/projects/lculibrk_prj/CNV/Ploidetect2/R/*.R")){
-#  if(grepl("ploidetect2.R", i)){
-#    next
-#  }
-#  print(i)
-#  source(i)
-#}
-#library(Ploidetect)
-#library(plyr)
-#library(dplyr)
-#library(data.table)
-#library(ggplot2)
-#load("data/centromeres.RData")
 #'@export
 ploidetect_presegment <- function(all_data, centromeres = F, simplify_size = 100000){
   
