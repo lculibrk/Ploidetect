@@ -185,8 +185,6 @@ ploidetect_preprocess <- function(all_data, centromeres = F, debugPlots = F, ver
   ## Holdover from old code where normalization was applied to bin sizes as well
   x$normalized_size <- x$window_size
   
-  
-  
   ## Another debug plot
   if(debugPlots){
     GCnorm2plot <- ggplot(x, aes(y = residual, x = normalized_size)) + 
