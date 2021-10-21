@@ -40,12 +40,13 @@ load_ploidetect_data = function(path){
 #' @export
 
 plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_lines = F, colors = "cnv"){
-
+	## Check for input mode
 	if(!mode %in% c("all", "zoomed")){
 		stop("Invalid mode selected")
 	}
 	
 	if(colors == "cnv"){
+		## CNV palette
 		CN_palette <- c("#000000FF", # Black
 										"#2aa4caFF", # Blue
 										"#979797FF", # Light grey
@@ -57,6 +58,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 										"#ec0077FF" # pink
 		)
 		names(CN_palette) = c(0:8)
+		## Labels of colors
 		plot_labs = c("0" = "HOMD", 
 									"1" = "CN = 1", 
 									"2" = "CN = 2 HET", 
@@ -68,6 +70,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 									"8" = "CN = 5+")
 
 	}else if(colors == "loh"){
+		## LOH-only colors
 		CN_palette <- c(
 			"#f39420FF", # Orange/LOH
 			"#000000FF"  # Black/HET
@@ -75,15 +78,15 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		names(CN_palette) = c("HOM", "HET")
 		plot_labs = c("HOM" = "HOM",
 									"HET" = "HET")
+	## Enforce either "cnv" or "loh" for color scheme
 	}else{
 		stop("must set \"cnv\" or \"loh\" for colors")
 	}
-	
+	## Add names to cytobands table if not present
 	if(!"chr" %in% names(cytobands)){
 		names(cytobands) = c("chr", "pos", "end", "lab", "stain")
 	}
-
-
+	## Make HOMDs into black crosses
 	plot_shapes <- c("0" = 4, 
 									 "1" = 19, 
 									 "2" = 19, 
@@ -93,29 +96,31 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 									 "6" = 19, 
 									 "7" = 19, 
 									 "8" = 19)
-
+	## Load CNV data
 	plot_calls = cnv_data
-	
+	## Get expected positions of CNVs to draw horizontal lines while plotting
 	plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
 	plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
 	
+	## Set boundaries for the plots
 	if(min(2^plt_positions) - diff(2^plt_positions)[1] <= 0){
 		minbound = min(log2(plot_calls[corrected_depth > 0]$corrected_depth))
 	}else{
 		minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
 	}
 	maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
-	
+	##  Clip super out-of-range observations and give them a star symbol in plots
 	plot_calls[,c("overflow", "underflow"):=F]
 	plot_calls[suppressWarnings(log2(corrected_depth)) > maxbound, overflow:=T]
 	plot_calls[suppressWarnings(log2(corrected_depth)) < minbound, underflow:=T]
 	plot_calls[,corrected_depth:=pmin(2^maxbound, corrected_depth)]
 	plot_calls[,corrected_depth:=pmax(2^minbound, corrected_depth)]
 	
-	## Lower bound on CN
+	## Create legend for plots
 	states = c(0:8, 8)
 	states = data.table("state" = states, state_cn = c(0, 1, 2, 2, 3, 3, 4, 4, 5, 5), zygosity = c("HOM", "HOM", "HET", "HOM", "HET", "HOM", "HET", "HOM", "HET", "HOM"))
 	legend_plot_fn = function(states, colors = colors){
+		## Most of this was a holdover from when the legend only showed the existing states
 		if(colors == "loh"){
 			plt_df = data.table("state" = c("HOM", "HOM", "HET"), "cols" = CN_palette[c(1, 1, 2)], "plot_labs" = plot_labs[c(1,1,2)], "plot_shapes" = rep(19, 3))
 			plt_df$y = c(NA, 1, 1)
@@ -133,25 +138,26 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 			plt_df[,x:=pmin(as.numeric(x), 1.15)]
 			plt_df[,y:=(y*0.2) + 0.2]
 		}
-
-
-		#    plt_df = plt_df[state %in% states]
-
-		#plt_df = plt_df[state %in% keep_states]
-
-
+		## Cector based on label columns
 		col_vec = plt_df$cols
 		names(col_vec) = plt_df$state
+		## First row x-y positions
 		label_df = data.table(y = unique(plt_df$y), x = 0.83)
+		## Table of CNs for the plot
 		cn_tbl = list("0" = 0, "1" = 1, "2" = 2, "3" = 2, "4" = 3, "5" = 3, "6" = 4, "7" = 4, "8" = 5)
+		## Holdover from when legend would hide unseen CNs/states
 		label_df$label = as.character(unique(unlist(cn_tbl[as.character(plt_df$state)])))
+		## Ensure that 5 is shown as 5+
 		if(5 %in% label_df$label){
 			label_df[label == 5]$label = "5+"
 		}
-		#label_df[,label:=paste0(" ", label)]
+		## Justify most points with 0
 		label_df[,just:=0]
+		## First row (header) of legend
 		top_labs = data.table("y" = max(label_df$y, na.rm = T) + max(as.numeric(na.omit(c(diff(plt_df$y), 0.2)))), "x" = c(0.85, 1, 1.15), "label" = c("CN", "HOM", "HET"), "just" = 0.5)
+		## Merge legend header with rest of legend
 		label_df = rbind(label_df, top_labs)
+		## Plot
 		legend_obj = ggplot(plt_df[state != 0], aes(x = x, y = y, color = cols, shape = plot_shapes)) + 
 			geom_point(size = 5) + 
 			theme_void() + 
@@ -163,6 +169,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 								size = 3, 
 								fontface = "bold") + 
 			scale_shape_identity()
+		## Add colors depending on whether it is CNV or LOH colors
 		if(colors != "loh"){
 			legend_obj = legend_obj + 
 				geom_point(plt_df[state == 0], mapping = aes(x = x, y = y, color = cols, shape = plot_shapes, stroke = 2)) + 
@@ -172,36 +179,40 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		}
 		return(legend_obj)
 	}
-	
+	## Create legend
 	legend = legend_plot_fn(plot_calls$state, colors = colors)
 	
+	## CNV plot function
 	cna_plot_fn = function(cnv_calls, colors = colors){
 		chr = cnv_calls$chr[1]
+		## Supposed to filter for CNs present, but this is defunct since we show everything anyways
 		map_pos = lapply(names(plt_positions), function(k){
 			cn = k
 			k = plt_positions[k]
 			poss_states = unique(states[state_cn == cn]$state)
-			#if(!any(poss_states %in% x$state)){
-			#  return(NA)
-			#}
 			if(length(poss_states) == 1){
 				return(poss_states)
 			}
 			poss_states = cnv_calls[state %in% poss_states][,.(.N), by = state][order(N, decreasing = T)]$state[1]
 			return(poss_states)
 		})
+		## Get positions of known cns in plot
 		map_pos = unlist(map_pos)
+		## Get lines to draw
 		lines = data.table(state = as.character(map_pos), y = plt_positions)
 		lines = lines[!is.na(state)]
 		lines = rbind(lines, data.table("state" = 8, y = maxbound))
+		## order points by amount per state, to ensure rarer states are plotted in front
 		ideal_ord = cnv_calls[,.N, by = state]
 		cnv_calls$state = factor(cnv_calls$state, levels = ideal_ord$state)
 		cnv_calls = cnv_calls[order(state)]
 		cnv_calls$state = as.numeric(as.character(cnv_calls$state))
 		cnv_calls$size = 1
 		cnv_calls[state == 0, size:=2]
+		## Clip points that underflow or overflow previously found bounds
 		clipped = cnv_calls[underflow == T | overflow == T]
 		clipped[,size:=2]
+		## Plot, two functions depending on color scheme
 		if(colors == "cnv"){
 			plot_obj = ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0], 
 												aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = as.character(state), size = size)) + 
@@ -211,7 +222,6 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 				scale_y_continuous(sec.axis = sec_axis(trans=~.*1, breaks = lines$y, labels = c(states[1:9,][state %in% lines$state]$state_cn, expression("">=20)), name = "Copy Number"), limits = c(minbound, maxbound)) + 
 				scale_x_continuous(limits = c(min(cnv_calls$pos)/1e+06, max(cnv_calls$end)/1e+06)) +
 				scale_size_identity() +
-				#geom_rug(data = x[segment != shift(segment)], mapping = aes(x = pos/1e+06), inherit.aes = F) + 
 				geom_hline(data = lines, mapping = aes(yintercept = y, color = state), size = 0.8, linetype = 1, alpha = 0.5) +
 				scale_shape_manual(values = plot_shapes, 
 													 labels = plot_labs,
@@ -233,8 +243,6 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 				scale_y_continuous(sec.axis = sec_axis(trans=~.*1, breaks = lines$y, labels = c(states[1:9,][state %in% lines$state]$state_cn, expression("">=20)), name = "Copy Number"), limits = c(minbound, maxbound)) + 
 				scale_x_continuous(limits = c(min(cnv_calls$pos)/1e+06, max(cnv_calls$end)/1e+06)) +
 				scale_size_identity() +
-				#geom_rug(data = x[segment != shift(segment)], mapping = aes(x = pos/1e+06), inherit.aes = F) + 
-				#geom_hline(data = lines, mapping = aes(yintercept = y, color = state), size = 0.8, linetype = 1, alpha = 0.5) +
 				scale_shape_manual(values = plot_shapes, 
 													 labels = plot_labs,
 													 name = "State") +
@@ -249,7 +257,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		}
 		return(plot_obj)
 	}
-	
+	## Function for BAF plotting
 	vaf_plot_fn = function(cnv_calls, colors = colors){
 		chr = cnv_calls$chr[1]
 		cnv_calls[,size:=1]
@@ -275,7 +283,6 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	}
 
 	### Ideograms
-	## TODO: take in genome ver and use specific one
 	cyto_plot_fn = function(cnv_calls, text = F){
 		cytoband_dat = data.table::copy(cytobands)
 		ideo_colors = c("gneg" = "white", "gpos25" = "black", "gpos50" = "black", "gpos75" = "black", "gpos100" = "black", "acen" = "red", "gvar" = "black", "stalk" = "black")
@@ -337,8 +344,6 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 focus_view = function(cnv_calls, chrom, start_position, end_position, colors, cytobands){
 	filt_data = cnv_calls[chrom == chr]
 	filt_data = filt_data[chrom == chr & pos >= start_position & end <= end_position]
-	print(chr)
-	print(filt_data)
 	plot_ploidetect(cnv_data = filt_data, cn_positions = cn_positions, cytobands = cytobands, mode = "zoomed", colors = colors)
 }
 
