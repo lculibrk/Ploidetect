@@ -16,7 +16,7 @@
 #library(ggplot2)
 #load("data/centromeres.RData")
 #'@export
-ploidetect_presegment <- function(all_data, centromeres = F, simplify_size = 100000){
+ploidetect_presegment <- function(all_data, centromeres = F, simplify_size = 100000, singlesample = F){
   
   ## Load centromeres
   if(centromeres != F){
@@ -26,7 +26,14 @@ ploidetect_presegment <- function(all_data, centromeres = F, simplify_size = 100
   }
 
   ## Add columns to input data
-  names(all_data) <- c("chr", "pos", "end", "tumour", "normal", "maf", "gc")
+  
+  if(singlesample){
+    names(all_data) <- c("chr", "pos", "end", "tumour", "maf", "gc")
+    all_data$normal = median(all_data$tumour)
+    all_data = all_data[,c("chr", "pos", "end", "tumour", "normal", "maf", "gc")]
+  }else{
+    names(all_data) <- c("chr", "pos", "end", "tumour", "normal", "maf", "gc")
+  }
   
   ## Run ploidetect_preprocess
   

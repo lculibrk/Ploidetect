@@ -818,17 +818,17 @@ nonparam_seg = function(dat, init = NA){
   
   out = c(init, select)
 }
-all_data = in_list$all_data
-segmented_data = in_list$segmented_data
-tp = in_models$tp[1]
-ploidy = in_models$ploidy[1]
-maxpeak = in_list$maxpeak
+#all_data = in_list$all_data
+#segmented_data = in_list$segmented_data
+#tp = in_models$tp[1]
+#ploidy = in_models$ploidy[1]
+#maxpeak = in_list$maxpeak
 
-all_data = in_list2$all_data
-segmented_data = in_list2$segmented_data
-tp = in_models2$tp[1]
-ploidy = in_models2$ploidy[1]
-maxpeak = in_list2$maxpeak
+#all_data = in_list2$all_data
+#segmented_data = in_list2$segmented_data
+#tp = in_models2$tp[1]
+#ploidy = in_models2$ploidy[1]
+#maxpeak = in_list2$maxpeak
 #' @export
 ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, verbose = T, min_size = 1, simp_size = 100000, max_iters = Inf, cytobands = F){
   ## Get estimated differential depth
