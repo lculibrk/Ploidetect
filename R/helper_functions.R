@@ -97,7 +97,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	plot_calls = cnv_data
 	
 	plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
-	plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
+	plt_positions = structure(log2(pmax(0, min(cnv_data$corrected_depth), plt_positions[names(plt_positions) %in% c(0:5)])), names = names(plt_positions[names(plt_positions) %in% c(0:5)]))
 	
 	if(min(2^plt_positions) - diff(2^plt_positions)[1] <= 0){
 		minbound = min(log2(plot_calls[corrected_depth > 0]$corrected_depth))
@@ -269,6 +269,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 			xlab("Position (Mb)") + 
 			ggtitle(paste0("Chromosome ", chr, " allele frequency profile")) + 
 			scale_y_continuous(limits = c(0.5, 1)) +
+			scale_x_continuous(limits = c(min(cnv_calls$pos)/1e+06, max(cnv_calls$end)/1e+06)) +
 			theme_bw() +
 			theme(legend.position = "none",
 						plot.margin = unit(c(5.5,43,5.5,5.5), "pt"))
@@ -318,15 +319,15 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	}
 	if(length(cytobands) == 1 & all(cytobands == F)){
 		if(mode == "all"){
-			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), vaf_plot_fn(cnv_data, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(plot_calls, colors = colors), vaf_plot_fn(plot_calls, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
 		}else if(mode == "zoomed"){
-			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(plot_calls, colors = colors), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
 		}
 	}else{
 		if(mode == "all"){
-			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), vaf_plot_fn(cnv_data, colors = colors), cyto_plot_fn(cnv_data), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(plot_calls, colors = colors), vaf_plot_fn(plot_calls, colors = colors), cyto_plot_fn(plot_calls), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
 		}else if(mode == "zoomed"){
-			CNA_plot = plot_grid(plot_grid(cna_plot_fn(cnv_data, colors = colors), cyto_plot_fn(cnv_data, text = T), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
+			CNA_plot = plot_grid(plot_grid(cna_plot_fn(plot_calls, colors = colors), cyto_plot_fn(plot_calls, text = T), align = "v", axis = "l", ncol = 1, rel_heights = c(1, 0.5, 0.05)), legend_plot_fn(plot_calls$state, colors = colors), rel_widths = c(1, 0.2))
 		}
 	}
 
