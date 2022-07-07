@@ -97,14 +97,19 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	plot_calls = cnv_data
 	
 	plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
-	plt_positions = structure(log2(pmax(0, min(cnv_data$corrected_depth), plt_positions[names(plt_positions) %in% c(0:5)])), names = names(plt_positions[names(plt_positions) %in% c(0:5)]))
+	plt_positions = structure(log2(pmax(0, plt_positions[names(plt_positions) %in% c(0:5)])), names = names(plt_positions[names(plt_positions) %in% c(0:5)]))
+	
+	if(any(plt_positions == -Inf)){
+		plt_positions[1] = plt_positions[2] - diff(plt_positions)[2]
+	}
+	
 	
 	if(min(2^plt_positions) - diff(2^plt_positions)[1] <= 0){
 		minbound = min(log2(plot_calls[corrected_depth > 0]$corrected_depth))
 	}else{
-		minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
+		minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[2])
 	}
-	maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
+	maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[2])
 	
 	plot_calls[,c("overflow", "underflow"):=F]
 	plot_calls[suppressWarnings(log2(corrected_depth)) > maxbound, overflow:=T]
