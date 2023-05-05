@@ -79,12 +79,13 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		stop("must set \"cnv\" or \"loh\" for colors")
 	}
 	
-	if(!"chr" %in% names(cytobands)){
-		names(cytobands) = c("chr", "pos", "end", "lab", "stain")
+	if(cytobands != F){
+		if(!"chr" %in% names(cytobands)){
+			names(cytobands) = c("chr", "pos", "end", "lab", "stain")
+		}
 	}
 
-
-	plot_shapes <- c("0" = 4, 
+		plot_shapes <- c("0" = 4, 
 									 "1" = 19, 
 									 "2" = 19, 
 									 "3" = 19, 
@@ -99,18 +100,18 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	plt_positions = cn_positions[which(as.numeric(names(cn_positions)) == round(as.numeric(names(cn_positions))))]
 	plt_positions = log2(plt_positions[names(plt_positions) %in% c(0:5)])
 	
-	if(min(2^plt_positions) - diff(2^plt_positions)[1] <= 0){
+	if(min(2^plt_positions, na.rm = T) - diff(2^plt_positions[!is.na(plt_positions)])[1] <= 0){
 		minbound = min(log2(plot_calls[corrected_depth > 0]$corrected_depth))
 	}else{
 		minbound = log2(min(2^plt_positions) - diff(2^plt_positions)[1])
 	}
-	maxbound = log2(max(2^plt_positions) +  15 * diff(2^plt_positions)[1])
+	maxbound = log2(max(2^plt_positions, na.rm = T) +  15 * diff(2^plt_positions[!is.na(plt_positions)])[1])
 	
 	plot_calls[,c("overflow", "underflow"):=F]
 	plot_calls[suppressWarnings(log2(corrected_depth)) > maxbound, overflow:=T]
 	plot_calls[suppressWarnings(log2(corrected_depth)) < minbound, underflow:=T]
-	plot_calls[,corrected_depth:=pmin(2^maxbound, corrected_depth)]
-	plot_calls[,corrected_depth:=pmax(2^minbound, corrected_depth)]
+	plot_calls[,corrected_depth:=pmin(2^maxbound, corrected_depth, na.rm = T)]
+	plot_calls[,corrected_depth:=pmax(2^minbound, corrected_depth, na.rm = T)]
 	
 	## Lower bound on CN
 	states = c(0:8, 8)
@@ -175,6 +176,10 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	
 	legend = legend_plot_fn(plot_calls$state, colors = colors)
 	
+	## Filter for centromeres here
+	if(cytobands != F){
+		cnv_calls = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]]
+	}
 	cna_plot_fn = function(cnv_calls, colors = colors){
 		chr = cnv_calls$chr[1]
 		map_pos = lapply(names(plt_positions), function(k){
@@ -203,7 +208,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		clipped = cnv_calls[underflow == T | overflow == T]
 		clipped[,size:=2]
 		if(colors == "cnv"){
-			plot_obj = ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0], 
+			plot_obj = ggplot(data = cnv_calls[state != 0], 
 												aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = as.character(state), size = size)) + 
 				geom_point_rast(aes(shape = factor(state)), alpha = 0.5) +
 				geom_point_rast(cnv_calls[state == 0], mapping = aes(x = pos/1e+06, y = log(corrected_depth, base = 2), shape = factor(state)), stroke = 1) + 
@@ -225,7 +230,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 				theme_bw() + 
 				theme(legend.position = "none")
 		}else{
-			plot_obj = ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0], 
+			plot_obj = ggplot(data = cnv_calls[state != 0], 
 						 aes(x = pos/1e+06, y = log(corrected_depth, base = 2), color = zygosity, size = size)) + 
 				geom_point_rast(aes(shape = factor(state)), alpha = 0.5) +
 				geom_point_rast(cnv_calls[state == 0], mapping = aes(x = pos/1e+06, y = log(corrected_depth, base = 2), shape = factor(state)), stroke = 1) + 
@@ -254,7 +259,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 		chr = cnv_calls$chr[1]
 		cnv_calls[,size:=1]
 		cnv_calls[state == 0, size:=2]
-		ggplot(data = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]][state != 0][!is.na(maf)], 
+		ggplot(data = cnv_calls[state != 0][!is.na(maf)], 
 					 aes(x = pos/1e+06, y = unlist(unmerge_mafs_grouped(maf, flip = T)), color = factor(state), size = size)) + 
 			geom_point_rast(size = 1, alpha = 0.5, aes(shape = factor(state))) + 
 			geom_point_rast(cnv_calls[state == 0], mapping = aes(shape = factor(state)), stroke = 1) +
