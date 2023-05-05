@@ -178,7 +178,7 @@ plot_ploidetect = function(cnv_data, cn_positions, cytobands, mode = "all", seg_
 	
 	## Filter for centromeres here
 	if(cytobands != F){
-		cnv_calls = cnv_calls[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]]
+		cnv_data = cnv_data[end < cytobands$pos[cytobands$chr %in% chr][1] | pos > cytobands$end[which(cytobands$chr %in% chr)[2]]]
 	}
 	cna_plot_fn = function(cnv_calls, colors = colors){
 		chr = cnv_calls$chr[1]
