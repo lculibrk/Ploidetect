@@ -1062,6 +1062,7 @@ ploidetect_cna_sc <- function(all_data, segmented_data, tp, ploidy, maxpeak, ver
     split_cns <- split(regress_cns, f = current_segment_mappings$chr)
     
     individual_pos <- lapply(split_segs, function(x){
+      #print(x$chr[1])
       vec <- as.numeric(names(table_vec(x$CN)))
       max_val <- max(ceiling(vec))
       ind_pos <- sort(c(vec, (0:max_val)[!0:max_val %in% vec]))

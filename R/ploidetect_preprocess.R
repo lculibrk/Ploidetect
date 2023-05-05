@@ -34,9 +34,9 @@ ploidetect_preprocess <- function(all_data, centromeres = F, debugPlots = F, ver
   #x <- x[grepl(pattern = paste0(c(paste0("^", 1:22), "^X"), "_", collapse = "|"), x = x[,window_id]),]
   
   if(verbose){
-    print("Filtering for chromosomes 1-22 and X")
+    print("Filtering for numeric chromosomes and X")
   }
-  x <- x %>% filter(chr %in% paste0(c(1:22, "X")))
+  x <- x %>% filter(chr %in% paste0(c(1:999, "X")))
   
 
   
